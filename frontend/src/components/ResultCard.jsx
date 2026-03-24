@@ -1,111 +1,103 @@
 import { useState } from 'react'
-import { ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
+import { ExternalLink, ChevronDown, ChevronUp, AlertTriangle, AlertCircle, Info } from 'lucide-react'
 import { platformColor } from '../lib/platforms'
 
-const SEVERITY_STYLES = {
+const SEVERITY = {
   high: {
     border: '#ef4444',
-    badge: { bg: 'rgba(239,68,68,0.15)', color: '#ef4444' },
-    label: 'High',
+    icon: AlertCircle,
+    pill: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400',
+    reason: 'bg-red-50 border-red-200 dark:bg-red-500/8 dark:border-red-500/20',
+    reasonLabel: 'text-red-600 dark:text-red-400',
+    label: 'High risk',
   },
   medium: {
     border: '#f59e0b',
-    badge: { bg: 'rgba(245,158,11,0.15)', color: '#f59e0b' },
-    label: 'Medium',
+    icon: AlertTriangle,
+    pill: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400',
+    reason: 'bg-amber-50 border-amber-200 dark:bg-amber-500/8 dark:border-amber-500/20',
+    reasonLabel: 'text-amber-700 dark:text-amber-400',
+    label: 'Medium risk',
   },
   low: {
     border: '#6366f1',
-    badge: { bg: 'rgba(99,102,241,0.15)', color: '#6366f1' },
-    label: 'Low',
+    icon: Info,
+    pill: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400',
+    reason: 'bg-indigo-50 border-indigo-200 dark:bg-indigo-500/8 dark:border-indigo-500/20',
+    reasonLabel: 'text-indigo-700 dark:text-indigo-400',
+    label: 'Low risk',
   },
 }
 
 export default function ResultCard({ item, index }) {
   const [expanded, setExpanded] = useState(false)
-  const sev = SEVERITY_STYLES[item.severity] ?? SEVERITY_STYLES.medium
+  const sev = SEVERITY[item.severity] ?? SEVERITY.medium
   const color = platformColor(item.platform)
-  const isLong = item.text?.length > 200
+  const SevIcon = sev.icon
+  const isLong = item.text?.length > 220
 
   return (
-    <div
-      className="rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden animate-fade-in-up"
-      style={{
-        borderLeftColor: sev.border,
-        borderLeftWidth: 3,
-        animationDelay: `${index * 40}ms`,
-      }}
+    <article
+      className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-zinc-800 overflow-hidden shadow-card hover:shadow-card-hover transition-shadow animate-fade-in-up"
+      style={{ borderLeftColor: sev.border, borderLeftWidth: 3, animationDelay: `${index * 40}ms` }}
     >
       <div className="p-5">
-        {/* Header row */}
+        {/* Header */}
         <div className="flex items-start justify-between gap-3 mb-4">
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Platform badge */}
             <span
-              className="px-2.5 py-1 rounded-lg text-xs font-semibold"
+              className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold"
               style={{ backgroundColor: color + '18', color }}
             >
               {item.platform}
             </span>
-            {/* Type badge */}
-            <span className="px-2.5 py-1 rounded-lg text-xs bg-zinc-800 text-zinc-400 capitalize">
+            <span className="px-2.5 py-1 rounded-lg text-xs bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 font-medium capitalize">
               {item.content_type}
             </span>
-            {/* Severity badge */}
-            <span
-              className="px-2.5 py-1 rounded-lg text-xs font-semibold capitalize"
-              style={sev.badge}
-            >
-              {sev.label} risk
+            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold ${sev.pill}`}>
+              <SevIcon className="w-3 h-3" />
+              {sev.label}
             </span>
           </div>
 
-          {/* Open link */}
           <a
             href={item.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-zinc-100 text-xs font-medium transition-colors"
+            className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700 text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-zinc-100 text-xs font-medium transition-colors"
           >
-            Open
-            <ExternalLink className="w-3 h-3" />
+            Open <ExternalLink className="w-3 h-3" />
           </a>
         </div>
 
-        {/* Content preview */}
+        {/* Content */}
         <div className="mb-4">
-          <p className={`text-sm text-zinc-300 leading-relaxed ${expanded ? '' : 'line-clamp-3'}`}>
+          <p className={`text-sm text-gray-700 dark:text-zinc-300 leading-relaxed ${expanded ? '' : 'line-clamp-3'}`}>
             {item.text}
           </p>
           {isLong && (
             <button
               onClick={() => setExpanded((e) => !e)}
-              className="mt-1.5 flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+              className="mt-1.5 inline-flex items-center gap-1 text-xs text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 transition-colors"
             >
-              {expanded ? (
-                <><ChevronUp className="w-3 h-3" /> Show less</>
-              ) : (
-                <><ChevronDown className="w-3 h-3" /> Show more</>
-              )}
+              {expanded ? <><ChevronUp className="w-3 h-3" /> Show less</> : <><ChevronDown className="w-3 h-3" /> Show more</>}
             </button>
           )}
         </div>
 
-        {/* Reason box */}
-        <div
-          className="p-3 rounded-xl border"
-          style={{ backgroundColor: sev.border + '08', borderColor: sev.border + '25' }}
-        >
-          <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: sev.border + 'cc' }}>
+        {/* Reason */}
+        <div className={`p-3 rounded-xl border ${sev.reason}`}>
+          <p className={`text-xs font-semibold uppercase tracking-wide mb-1 ${sev.reasonLabel}`}>
             Why flagged
           </p>
-          <p className="text-xs text-zinc-400 leading-relaxed">{item.reason}</p>
+          <p className="text-xs text-gray-600 dark:text-zinc-400 leading-relaxed">{item.reason}</p>
         </div>
 
         {/* Date */}
         {item.created_at && item.created_at !== 'unknown' && (
-          <p className="text-xs text-zinc-600 mt-3">{item.created_at}</p>
+          <p className="text-xs text-gray-400 dark:text-zinc-600 mt-3">{item.created_at}</p>
         )}
       </div>
-    </div>
+    </article>
   )
 }
