@@ -27,17 +27,14 @@ def check_credentials(platforms: list[str]) -> bool:
     missing = []
     checks = {
         "reddit": [config.REDDIT_CLIENT_ID, config.REDDIT_CLIENT_SECRET],
-        "twitter": [config.TWITTER_API_KEY, config.TWITTER_API_SECRET,
-                    config.TWITTER_ACCESS_TOKEN, config.TWITTER_ACCESS_SECRET,
-                    config.TWITTER_USERNAME],
+        "twitter": [config.TWITTER_BEARER_TOKEN, config.TWITTER_USERNAME],
         "facebook": [config.FACEBOOK_ACCESS_TOKEN],
         "instagram": [config.INSTAGRAM_USERNAME, config.INSTAGRAM_PASSWORD],
         "linkedin": [config.LINKEDIN_CLIENT_ID, config.LINKEDIN_CLIENT_SECRET],
     }
     names = {
         "reddit": ["REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET"],
-        "twitter": ["TWITTER_API_KEY", "TWITTER_API_SECRET", "TWITTER_ACCESS_TOKEN",
-                    "TWITTER_ACCESS_SECRET", "TWITTER_USERNAME"],
+        "twitter": ["TWITTER_BEARER_TOKEN", "TWITTER_USERNAME"],
         "facebook": ["FACEBOOK_ACCESS_TOKEN"],
         "instagram": ["INSTAGRAM_USERNAME", "INSTAGRAM_PASSWORD"],
         "linkedin": ["LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET"],
@@ -58,7 +55,7 @@ def check_credentials(platforms: list[str]) -> bool:
 
 
 def fetch_platform(platform: str, limit: int) -> list:
-    import importlib
+    import importlib  # noqa: PLC0415
     try:
         module = importlib.import_module(PLATFORM_MODULES[platform])
         return module.fetch_items(limit=limit or None)
@@ -80,7 +77,7 @@ def main():
     )
     parser.add_argument(
         "--severity",
-        choices=["high", "medium"],
+        choices=["high", "medium", "low"],
         default="medium",
         help="Minimum severity to include in report (default: medium)",
     )

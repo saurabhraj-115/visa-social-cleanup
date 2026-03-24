@@ -32,6 +32,7 @@ export default function App() {
 
   const [results, setResults] = useState({ flagged: [], totalAnalyzed: 0 })
   const wsRef = useRef(null)
+  const scanTimeoutRef = useRef(null)
 
   // Load platform status on mount
   useEffect(() => {
@@ -57,6 +58,13 @@ export default function App() {
 
     const ws = new WebSocket(wsUrl())
     wsRef.current = ws
+
+    // Abort if scan takes more than 10 minutes
+    scanTimeoutRef.current = setTimeout(() => {
+      ws.close()
+      setServerError('Scan timed out after 10 minutes.')
+      setView('dashboard')
+    }, 10 * 60 * 1000)
 
     ws.onopen = () => ws.send(JSON.stringify(scanConfig))
 
@@ -94,23 +102,29 @@ export default function App() {
           }))
           break
         case 'done':
+          clearTimeout(scanTimeoutRef.current)
           setResults({ flagged: msg.flagged ?? [], totalAnalyzed: msg.total_analyzed ?? 0 })
           setView('results')
           break
         case 'error':
+          clearTimeout(scanTimeoutRef.current)
           setServerError(msg.error)
           setView('dashboard')
           break
+        default:
+          console.warn('[ws] unknown message type:', msg.type)
       }
     }
 
     ws.onerror = () => {
+      clearTimeout(scanTimeoutRef.current)
       setServerError('WebSocket error. Is server.py running?')
       setView('dashboard')
     }
   }
 
   const reset = () => {
+    clearTimeout(scanTimeoutRef.current)
     wsRef.current?.close()
     setView('dashboard')
     setServerError(null)
@@ -146,7 +160,7 @@ export default function App() {
         />
       )}
       {view === 'scanning' && (
-        <ScanProgress progress={progress} platforms={scanConfig.platforms} />
+        <ScanProgress progress={progress} platforms={scanConfig.platforms} onCancel={reset} />
       )}
       {view === 'results' && (
         <Results results={results} onNewScan={reset} />

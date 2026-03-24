@@ -24,7 +24,7 @@ function StatusIcon({ status }) {
   )
 }
 
-export default function ScanProgress({ progress, platforms }) {
+export default function ScanProgress({ progress, platforms, onCancel }) {
   const pct = progress.total > 0 ? Math.round((progress.analyzed / progress.total) * 100) : 0
 
   const phaseLabel = {
@@ -146,6 +146,16 @@ export default function ScanProgress({ progress, platforms }) {
             </div>
           </div>
         )}
+
+        {/* ── Cancel ───────────────────────────────────────── */}
+        <div className="mt-6 text-center">
+          <button
+            onClick={onCancel}
+            className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+          >
+            Cancel scan
+          </button>
+        </div>
       </div>
     </div>
   )

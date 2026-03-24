@@ -51,11 +51,14 @@ _ALL_CRED_KEYS = {k for vars in CREDENTIAL_VARS.values() for k in vars} | {"ANTH
 @app.get("/api/status")
 def get_status():
     """Return per-platform configuration status."""
+    def _is_set(val):
+        return bool(getattr(config, val, "").strip())
+
     platforms = {
-        p: all(bool(getattr(config, v, "")) for v in vars)
+        p: all(_is_set(v) for v in vars)
         for p, vars in CREDENTIAL_VARS.items()
     }
-    keys_set = {k: bool(getattr(config, k, "")) for k in _ALL_CRED_KEYS}
+    keys_set = {k: _is_set(k) for k in _ALL_CRED_KEYS}
     return {
         "platforms": platforms,
         "has_anthropic_key": bool(config.ANTHROPIC_API_KEY),
@@ -69,7 +72,8 @@ def update_credentials(body: dict):
     from urllib.parse import unquote
     for key, value in body.items():
         if key in _ALL_CRED_KEYS and isinstance(value, str) and value.strip():
-            clean = unquote(value.strip())  # decode any URL-encoded chars (e.g. %2B → +)
+            # Decode URL-encoded chars, strip whitespace and newlines to prevent .env corruption
+            clean = unquote(value.strip()).replace('\n', '').replace('\r', '')
             save_env_token(key, clean)
             os.environ[key] = clean
     importlib.reload(config)
