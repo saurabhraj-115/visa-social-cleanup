@@ -30,6 +30,9 @@ frontend/.vite/
 # Devvit experiment
 visa-cleanup-app/
 
+# Claude Code
+.claude/
+
 # IDE
 .vscode/
 .idea/
