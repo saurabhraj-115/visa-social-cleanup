@@ -13,41 +13,28 @@ def _ts(dt) -> str:
 
 
 def fetch_items(limit: int = None) -> list[ContentItem]:
-    auth = tweepy.OAuth1UserHandler(
-        config.TWITTER_API_KEY,
-        config.TWITTER_API_SECRET,
-        config.TWITTER_ACCESS_TOKEN,
-        config.TWITTER_ACCESS_SECRET,
-    )
-    api_v1 = tweepy.API(auth)
+    if not config.TWITTER_BEARER_TOKEN or not config.TWITTER_USERNAME:
+        raise RuntimeError("Twitter credentials not configured")
 
-    client = tweepy.Client(
-        consumer_key=config.TWITTER_API_KEY,
-        consumer_secret=config.TWITTER_API_SECRET,
-        access_token=config.TWITTER_ACCESS_TOKEN,
-        access_token_secret=config.TWITTER_ACCESS_SECRET,
-    )
-
-    items: list[ContentItem] = []
+    client = tweepy.Client(bearer_token=config.TWITTER_BEARER_TOKEN)
     username = config.TWITTER_USERNAME.lstrip("@")
+    items: list[ContentItem] = []
 
-    # Get own user ID
+    # Resolve username → user ID
     try:
-        me = client.get_me(user_auth=True)
-        user_id = me.data.id
+        resp = client.get_user(username=username)
+        user_id = resp.data.id
     except Exception as e:
-        print(f"[Twitter] Could not get user info: {e}")
+        print(f"[Twitter] Could not resolve username @{username}: {e}")
         return items
 
     # Own tweets
     try:
-        max_results = min(limit or 100, 100)
         paginator = tweepy.Paginator(
             client.get_users_tweets,
             id=user_id,
-            max_results=max_results,
+            max_results=min(limit or 100, 100),
             tweet_fields=["created_at", "text"],
-            user_auth=True,
         )
         count = 0
         for tweet in paginator.flatten(limit=limit):
@@ -65,7 +52,7 @@ def fetch_items(limit: int = None) -> list[ContentItem]:
     except Exception as e:
         print(f"[Twitter] Could not fetch tweets: {e}")
 
-    # Liked tweets
+    # Liked tweets (requires user context — skip gracefully if not allowed)
     try:
         paginator = tweepy.Paginator(
             client.get_liked_tweets,
@@ -74,13 +61,11 @@ def fetch_items(limit: int = None) -> list[ContentItem]:
             tweet_fields=["created_at", "text", "author_id"],
             expansions=["author_id"],
             user_fields=["username"],
-            user_auth=True,
         )
         count = 0
         for response in paginator:
             if not response.data:
                 continue
-            # Build author_id -> username map
             users = {u.id: u.username for u in (response.includes.get("users") or [])}
             for tweet in response.data:
                 author_username = users.get(tweet.author_id, "unknown")
@@ -98,6 +83,6 @@ def fetch_items(limit: int = None) -> list[ContentItem]:
             if limit and count >= limit:
                 break
     except Exception as e:
-        print(f"[Twitter] Could not fetch liked tweets: {e}")
+        print(f"[Twitter] Could not fetch liked tweets (may need elevated access): {e}")
 
     return items

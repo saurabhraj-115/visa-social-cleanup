@@ -25,6 +25,8 @@ def _fetch_all_pages(graph, path: str, fields: str, limit: int = None) -> list[d
 
 
 def fetch_items(limit: int = None) -> list[ContentItem]:
+    if not config.FACEBOOK_ACCESS_TOKEN:
+        raise RuntimeError("Facebook credentials not configured")
     graph = facebook.GraphAPI(access_token=config.FACEBOOK_ACCESS_TOKEN, version="17.0")
     items: list[ContentItem] = []
 

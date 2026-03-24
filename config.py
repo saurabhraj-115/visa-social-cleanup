@@ -12,17 +12,13 @@ def get(key: str, required: bool = False) -> str:
 # Anthropic
 ANTHROPIC_API_KEY = get("ANTHROPIC_API_KEY")
 
-# Reddit
+# Reddit (OAuth — create a "web" app at reddit.com/prefs/apps, redirect URI: http://localhost:8080)
 REDDIT_CLIENT_ID = get("REDDIT_CLIENT_ID")
 REDDIT_CLIENT_SECRET = get("REDDIT_CLIENT_SECRET")
-REDDIT_USERNAME = get("REDDIT_USERNAME")
-REDDIT_PASSWORD = get("REDDIT_PASSWORD")
+REDDIT_REFRESH_TOKEN = get("REDDIT_REFRESH_TOKEN")  # auto-saved after first OAuth login
 
-# Twitter/X
-TWITTER_API_KEY = get("TWITTER_API_KEY")
-TWITTER_API_SECRET = get("TWITTER_API_SECRET")
-TWITTER_ACCESS_TOKEN = get("TWITTER_ACCESS_TOKEN")
-TWITTER_ACCESS_SECRET = get("TWITTER_ACCESS_SECRET")
+# Twitter/X (Bearer token from developer.twitter.com → your app → Keys and Tokens)
+TWITTER_BEARER_TOKEN = get("TWITTER_BEARER_TOKEN")
 TWITTER_USERNAME = get("TWITTER_USERNAME")
 
 # Facebook
@@ -31,3 +27,8 @@ FACEBOOK_ACCESS_TOKEN = get("FACEBOOK_ACCESS_TOKEN")
 # Instagram
 INSTAGRAM_USERNAME = get("INSTAGRAM_USERNAME")
 INSTAGRAM_PASSWORD = get("INSTAGRAM_PASSWORD")
+
+# LinkedIn (OAuth 2.0 — create an app at linkedin.com/developers, redirect URI: http://localhost:8080)
+LINKEDIN_CLIENT_ID = get("LINKEDIN_CLIENT_ID")
+LINKEDIN_CLIENT_SECRET = get("LINKEDIN_CLIENT_SECRET")
+LINKEDIN_ACCESS_TOKEN = get("LINKEDIN_ACCESS_TOKEN")  # auto-saved after first OAuth login

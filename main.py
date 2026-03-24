@@ -19,26 +19,28 @@ PLATFORM_MODULES = {
     "twitter": "platforms.twitter_client",
     "facebook": "platforms.facebook_client",
     "instagram": "platforms.instagram_client",
+    "linkedin": "platforms.linkedin_client",
 }
 
 
 def check_credentials(platforms: list[str]) -> bool:
     missing = []
     checks = {
-        "reddit": [config.REDDIT_CLIENT_ID, config.REDDIT_CLIENT_SECRET,
-                   config.REDDIT_USERNAME, config.REDDIT_PASSWORD],
+        "reddit": [config.REDDIT_CLIENT_ID, config.REDDIT_CLIENT_SECRET],
         "twitter": [config.TWITTER_API_KEY, config.TWITTER_API_SECRET,
                     config.TWITTER_ACCESS_TOKEN, config.TWITTER_ACCESS_SECRET,
                     config.TWITTER_USERNAME],
         "facebook": [config.FACEBOOK_ACCESS_TOKEN],
         "instagram": [config.INSTAGRAM_USERNAME, config.INSTAGRAM_PASSWORD],
+        "linkedin": [config.LINKEDIN_CLIENT_ID, config.LINKEDIN_CLIENT_SECRET],
     }
     names = {
-        "reddit": ["REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "REDDIT_USERNAME", "REDDIT_PASSWORD"],
+        "reddit": ["REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET"],
         "twitter": ["TWITTER_API_KEY", "TWITTER_API_SECRET", "TWITTER_ACCESS_TOKEN",
                     "TWITTER_ACCESS_SECRET", "TWITTER_USERNAME"],
         "facebook": ["FACEBOOK_ACCESS_TOKEN"],
         "instagram": ["INSTAGRAM_USERNAME", "INSTAGRAM_PASSWORD"],
+        "linkedin": ["LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET"],
     }
     for p in platforms:
         for val, name in zip(checks[p], names[p]):
@@ -72,8 +74,8 @@ def main():
     parser.add_argument(
         "--platforms",
         nargs="+",
-        choices=["reddit", "twitter", "facebook", "instagram"],
-        default=["reddit", "twitter", "facebook", "instagram"],
+        choices=["reddit", "twitter", "facebook", "instagram", "linkedin"],
+        default=["reddit", "twitter", "facebook", "instagram", "linkedin"],
         help="Which platforms to scan (default: all)",
     )
     parser.add_argument(

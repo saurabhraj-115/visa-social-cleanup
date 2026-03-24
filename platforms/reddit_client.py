@@ -1,8 +1,12 @@
 from datetime import datetime, timezone
-from typing import Generator
 import praw
 import config
 from platforms import ContentItem
+from platforms.oauth_flow import get_auth_code, save_env_token
+
+REDIRECT_URI = "http://localhost:8080"
+SCOPES = ["identity", "history", "mysubreddits"]
+USER_AGENT = "visa_cleanup_agent/1.0"
 
 
 def _ts(utc_timestamp: float) -> str:
@@ -17,21 +21,51 @@ def _comment_url(comment) -> str:
     return f"https://reddit.com{comment.permalink}"
 
 
-def fetch_items(limit: int = None) -> list[ContentItem]:
+def _get_reddit() -> praw.Reddit:
+    """Return an authenticated Reddit instance, running OAuth if needed."""
+    if config.REDDIT_REFRESH_TOKEN:
+        return praw.Reddit(
+            client_id=config.REDDIT_CLIENT_ID,
+            client_secret=config.REDDIT_CLIENT_SECRET,
+            refresh_token=config.REDDIT_REFRESH_TOKEN,
+            user_agent=USER_AGENT,
+        )
+
+    # First-time OAuth flow
     reddit = praw.Reddit(
         client_id=config.REDDIT_CLIENT_ID,
         client_secret=config.REDDIT_CLIENT_SECRET,
-        username=config.REDDIT_USERNAME,
-        password=config.REDDIT_PASSWORD,
-        user_agent=f"visa_cleanup_agent/1.0 by u/{config.REDDIT_USERNAME}",
+        redirect_uri=REDIRECT_URI,
+        user_agent=USER_AGENT,
     )
+    auth_url = reddit.auth.url(scopes=SCOPES, state="visa_cleanup", duration="permanent")
+    params = get_auth_code(auth_url)
+
+    if "error" in params:
+        raise RuntimeError(f"Reddit OAuth error: {params['error']}")
+    if "code" not in params:
+        raise RuntimeError(f"Reddit OAuth: unexpected redirect params: {params}")
+
+    refresh_token = reddit.auth.authorize(params["code"])
+    save_env_token("REDDIT_REFRESH_TOKEN", refresh_token)
+    print("[Reddit] Refresh token saved to .env — won't need to log in again.")
+    return reddit
+
+
+def fetch_items(limit: int = None) -> list[ContentItem]:
+    if not config.REDDIT_CLIENT_ID or not config.REDDIT_CLIENT_SECRET:
+        raise RuntimeError("Reddit credentials not configured")
+    try:
+        reddit = _get_reddit()
+    except Exception as e:
+        print(f"[Reddit] Auth failed: {e}")
+        return []
 
     items: list[ContentItem] = []
     me = reddit.user.me()
 
     # Own posts
     for sub in me.submissions.new(limit=limit):
-        text = sub.selftext or sub.title
         items.append(ContentItem(
             platform="Reddit",
             content_type="post",
@@ -54,9 +88,8 @@ def fetch_items(limit: int = None) -> list[ContentItem]:
 
     # Upvoted items
     try:
-        for item in reddit.user.me().upvoted(limit=limit):
+        for item in me.upvoted(limit=limit):
             if hasattr(item, "selftext"):
-                # It's a submission
                 items.append(ContentItem(
                     platform="Reddit",
                     content_type="upvote",
@@ -66,7 +99,6 @@ def fetch_items(limit: int = None) -> list[ContentItem]:
                     item_id=item.id,
                 ))
             else:
-                # It's a comment
                 items.append(ContentItem(
                     platform="Reddit",
                     content_type="upvote",

@@ -5,6 +5,8 @@ from platforms import ContentItem
 
 
 def fetch_items(limit: int = None) -> list[ContentItem]:
+    if not config.INSTAGRAM_USERNAME or not config.INSTAGRAM_PASSWORD:
+        raise RuntimeError("Instagram credentials not configured")
     cl = Client()
     try:
         cl.login(config.INSTAGRAM_USERNAME, config.INSTAGRAM_PASSWORD)
