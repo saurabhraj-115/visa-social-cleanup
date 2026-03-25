@@ -15,15 +15,23 @@ from fastapi.staticfiles import StaticFiles
 
 import config
 import analyzer as anlz
+import analyzer_interview as interview_anlz
+import token_store
+from oauth_routes import router as oauth_router
 from platforms.oauth_flow import save_env_token
 
 app = FastAPI()
+app.include_router(oauth_router)
 executor = ThreadPoolExecutor(max_workers=2)
 
-# Allow Vite dev server to call the API during development
+# Allow Vite dev server in development; APP_URL covers the Fly.io domain in production
+_app_url = os.environ.get("APP_URL", "")
+_allowed_origins = ["http://localhost:5173", "http://localhost:5174"]
+if _app_url:
+    _allowed_origins.append(_app_url)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=_allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -36,33 +44,42 @@ PLATFORM_MODULES = {
     "linkedin": "platforms.linkedin_client",
 }
 
-CREDENTIAL_VARS = {
-    "reddit": ["REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET"],
-    "twitter": ["TWITTER_BEARER_TOKEN", "TWITTER_USERNAME"],
-    "facebook": ["FACEBOOK_ACCESS_TOKEN"],
-    "instagram": ["INSTAGRAM_USERNAME", "INSTAGRAM_PASSWORD"],
-    "linkedin": ["LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET"],
+# Credential keys that can be saved via /api/credentials
+_CRED_KEYS = {
+    "ANTHROPIC_API_KEY",
+    "REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET",
+    "TWITTER_CLIENT_ID", "TWITTER_CLIENT_SECRET",
+    "FACEBOOK_APP_ID", "FACEBOOK_APP_SECRET",
+    "INSTAGRAM_USERNAME", "INSTAGRAM_PASSWORD",
+    "LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET",
 }
-
-
-_ALL_CRED_KEYS = {k for vars in CREDENTIAL_VARS.values() for k in vars} | {"ANTHROPIC_API_KEY"}
 
 
 @app.get("/api/status")
 def get_status():
-    """Return per-platform configuration status."""
-    def _is_set(val):
-        return bool(getattr(config, val, "").strip())
+    """Return per-platform connection and credential status."""
+    connected = token_store.get_connected()
 
-    platforms = {
-        p: all(_is_set(v) for v in vars)
-        for p, vars in CREDENTIAL_VARS.items()
-    }
-    keys_set = {k: _is_set(k) for k in _ALL_CRED_KEYS}
+    def _cfg(*keys):
+        return all(bool(getattr(config, k, "").strip()) for k in keys)
+
     return {
-        "platforms": platforms,
+        # True = OAuth token exists (or username/password for Instagram)
+        "platforms": {
+            "reddit":    connected.get("reddit", False),
+            "twitter":   connected.get("twitter", False),
+            "facebook":  connected.get("facebook", False),
+            "instagram": _cfg("INSTAGRAM_USERNAME", "INSTAGRAM_PASSWORD"),
+            "linkedin":  connected.get("linkedin", False),
+        },
+        # True = client_id/secret are saved (needed before OAuth popup)
+        "credentials_configured": {
+            "reddit":   _cfg("REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET"),
+            "twitter":  _cfg("TWITTER_CLIENT_ID", "TWITTER_CLIENT_SECRET"),
+            "facebook": _cfg("FACEBOOK_APP_ID", "FACEBOOK_APP_SECRET"),
+            "linkedin": _cfg("LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET"),
+        },
         "has_anthropic_key": bool(config.ANTHROPIC_API_KEY),
-        "keys_set": keys_set,
     }
 
 
@@ -71,13 +88,68 @@ def update_credentials(body: dict):
     """Save non-empty credential values to .env and hot-reload config."""
     from urllib.parse import unquote
     for key, value in body.items():
-        if key in _ALL_CRED_KEYS and isinstance(value, str) and value.strip():
-            # Decode URL-encoded chars, strip whitespace and newlines to prevent .env corruption
+        if key in _CRED_KEYS and isinstance(value, str) and value.strip():
             clean = unquote(value.strip()).replace('\n', '').replace('\r', '')
             save_env_token(key, clean)
             os.environ[key] = clean
     importlib.reload(config)
     return get_status()
+
+
+@app.post("/api/delete")
+def delete_item(body: dict):
+    """Delete or unlike a specific content item via its platform client."""
+    platform = body.get("platform", "").lower()
+    item_id = body.get("item_id", "")
+    content_type = body.get("content_type", "")
+    module_path = PLATFORM_MODULES.get(platform)
+    if not module_path:
+        return {"ok": False, "error": f"Unknown platform: {platform}"}
+    try:
+        module = importlib.import_module(module_path)
+        module.delete_item(item_id, content_type)
+        return {"ok": True}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
+
+@app.post("/api/dossier")
+def generate_dossier(body: dict):
+    flagged = body.get("flagged", [])
+    dossier = interview_anlz.generate_dossier(flagged)
+    return {"dossier": dossier}
+
+
+@app.post("/api/prep-package")
+def generate_prep_package(body: dict):
+    flagged = body.get("flagged", [])
+    dossier = body.get("dossier", "")
+    package = interview_anlz.generate_prep_package(dossier, flagged)
+    return package
+
+
+@app.post("/api/rewrite")
+def rewrite_item(body: dict):
+    rewritten = interview_anlz.rewrite_content(body)
+    return {"rewritten": rewritten}
+
+
+@app.post("/api/interview/question")
+def get_interview_question(body: dict):
+    dossier = body.get("dossier", "")
+    history = body.get("history", [])
+    flagged = body.get("flagged", [])
+    question = interview_anlz.get_interview_question(dossier, history, flagged)
+    return {"question": question}
+
+
+@app.post("/api/interview/evaluate")
+def evaluate_answer(body: dict):
+    question = body.get("question", "")
+    answer = body.get("answer", "")
+    flagged_item = body.get("flagged_item")
+    result = interview_anlz.evaluate_answer(question, answer, flagged_item)
+    return result
 
 
 @app.websocket("/ws/scan")
@@ -88,7 +160,7 @@ async def scan_ws(websocket: WebSocket):
     try:
         payload = await websocket.receive_json()
         platforms: list[str] = payload.get("platforms", [])
-        limit: int | None = payload.get("limit") or None
+        limit = payload.get("limit") or None
         severity: str = payload.get("severity", "medium")
 
         queue: asyncio.Queue = asyncio.Queue()

@@ -47,8 +47,14 @@ def get_auth_code(auth_url: str, port: int = 8080) -> dict:
     return _CallbackHandler.params
 
 
-def save_env_token(key: str, value: str, env_path: str = ".env") -> None:
-    """Write or update a single KEY=value line in *env_path*."""
+def save_env_token(key: str, value: str, env_path: str = None) -> None:
+    """Write or update a single KEY=value line in the .env file.
+    Uses DATA_DIR if set (Fly.io volume), otherwise project root."""
+    from pathlib import Path
+    if env_path is None:
+        data_dir = os.environ.get("DATA_DIR", str(Path(__file__).parent.parent))
+        env_path = os.path.join(data_dir, ".env")
+
     lines: list[str] = []
     if os.path.exists(env_path):
         with open(env_path) as f:
@@ -61,5 +67,6 @@ def save_env_token(key: str, value: str, env_path: str = ".env") -> None:
     else:
         lines.append(f"{key}={value}\n")
 
+    os.makedirs(os.path.dirname(env_path), exist_ok=True)
     with open(env_path, "w") as f:
         f.writelines(lines)

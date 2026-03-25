@@ -1,5 +1,6 @@
 import json
 import time
+import hashlib
 from dataclasses import dataclass
 from typing import Optional
 import anthropic
@@ -48,10 +49,19 @@ class AnalysisResult:
 class ContentAnalyzer:
     def __init__(self):
         self.client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+        self._cache: dict[str, AnalysisResult] = {}
+
+    def _cache_key(self, platform: str, content_type: str, text: str) -> str:
+        raw = f"{platform}:{content_type}:{text[:2000]}"
+        return hashlib.sha256(raw.encode()).hexdigest()
 
     def analyze(self, platform: str, content_type: str, text: str) -> AnalysisResult:
         if not text or not text.strip():
             return AnalysisResult(flag=False, severity="low", reason="Empty content")
+
+        key = self._cache_key(platform, content_type, text)
+        if key in self._cache:
+            return self._cache[key]
 
         # Truncate very long content to save tokens
         truncated = text[:2000] if len(text) > 2000 else text
@@ -74,11 +84,13 @@ class ContentAnalyzer:
             )
             raw = response.content[0].text.strip()
             data = json.loads(raw)
-            return AnalysisResult(
+            result = AnalysisResult(
                 flag=bool(data.get("flag", False)),
                 severity=data.get("severity", "low"),
                 reason=data.get("reason", ""),
             )
+            self._cache[key] = result
+            return result
         except (json.JSONDecodeError, KeyError, IndexError) as e:
             return AnalysisResult(flag=False, severity="low", reason=f"Analysis error: {e}")
 

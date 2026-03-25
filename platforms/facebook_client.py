@@ -1,9 +1,22 @@
 import facebook
 import config
+import token_store
 from platforms import ContentItem
 
 
-def _fetch_all_pages(graph, path: str, fields: str, limit: int = None) -> list[dict]:
+def _get_access_token() -> str:
+    token_data = token_store.get_token("facebook")
+    if token_data and token_data.get("access_token"):
+        return token_data["access_token"]
+    # Fallback to legacy env token
+    if config.FACEBOOK_ACCESS_TOKEN:
+        return config.FACEBOOK_ACCESS_TOKEN
+    raise RuntimeError(
+        "Facebook not connected. Open Settings and click 'Connect Facebook' to authorize."
+    )
+
+
+def _fetch_all_pages(graph, path: str, fields: str, limit: int = None) -> list:
     results = []
     url = f"{path}?fields={fields}&limit=100"
     while url:
@@ -15,7 +28,6 @@ def _fetch_all_pages(graph, path: str, fields: str, limit: int = None) -> list[d
         next_page = data.get("paging", {}).get("next")
         if not next_page:
             break
-        # Extract the relative path after the graph API base
         url = next_page.split("graph.facebook.com/v")[-1]
         if "/" in url:
             url = "/" + url.split("/", 1)[1]
@@ -24,13 +36,11 @@ def _fetch_all_pages(graph, path: str, fields: str, limit: int = None) -> list[d
     return results
 
 
-def fetch_items(limit: int = None) -> list[ContentItem]:
-    if not config.FACEBOOK_ACCESS_TOKEN:
-        raise RuntimeError("Facebook credentials not configured")
-    graph = facebook.GraphAPI(access_token=config.FACEBOOK_ACCESS_TOKEN, version="17.0")
-    items: list[ContentItem] = []
+def fetch_items(limit: int = None) -> list:
+    access_token = _get_access_token()
+    graph = facebook.GraphAPI(access_token=access_token, version="17.0")
+    items = []
 
-    # Own posts
     try:
         posts = _fetch_all_pages(graph, "me/posts", "id,message,story,permalink_url,created_time", limit)
         for post in posts:
@@ -48,7 +58,6 @@ def fetch_items(limit: int = None) -> list[ContentItem]:
     except Exception as e:
         print(f"[Facebook] Could not fetch posts: {e}")
 
-    # Liked pages/items
     try:
         likes = _fetch_all_pages(graph, "me/likes", "id,name,link", limit)
         for like in likes:
@@ -67,3 +76,9 @@ def fetch_items(limit: int = None) -> list[ContentItem]:
         print(f"[Facebook] Could not fetch likes: {e}")
 
     return items
+
+
+def delete_item(item_id: str, content_type: str):
+    access_token = _get_access_token()
+    graph = facebook.GraphAPI(access_token=access_token, version="17.0")
+    graph.delete_object(item_id)

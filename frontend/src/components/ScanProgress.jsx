@@ -1,16 +1,27 @@
+import { useState } from 'react'
 import { PLATFORMS } from '../lib/platforms'
 
+// status can be: undefined | 'loading' | number | { code: 'error', message: string }
+function statusCode(status) {
+  if (status === undefined) return 'queued'
+  if (status === 'loading') return 'loading'
+  if (typeof status === 'number') return 'done'
+  if (status?.code === 'error') return 'error'
+  return 'queued'
+}
+
 function StatusDot({ status }) {
-  if (status === undefined)
+  const code = statusCode(status)
+  if (code === 'queued')
     return <span className="w-2 h-2 rounded-full bg-gray-200 dark:bg-zinc-700 inline-block" />
-  if (status === 'loading')
+  if (code === 'loading')
     return (
       <svg className="w-4 h-4 text-violet-500 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
         <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
         <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
       </svg>
     )
-  if (status === 'error')
+  if (code === 'error')
     return (
       <svg className="w-4 h-4 text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -24,6 +35,7 @@ function StatusDot({ status }) {
 }
 
 export default function ScanProgress({ progress, platforms, onCancel }) {
+  const [expandedError, setExpandedError] = useState(null)
   const pct = progress.total > 0 ? Math.round((progress.analyzed / progress.total) * 100) : 0
 
   const phaseLabel = {
@@ -96,29 +108,43 @@ export default function ScanProgress({ progress, platforms, onCancel }) {
           {platforms.map((platform) => {
             const meta = PLATFORMS[platform]
             const status = progress.fetchStatus[platform]
+            const code = statusCode(status)
+            const isExpanded = expandedError === platform
             return (
-              <div key={platform} className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold"
-                    style={{ backgroundColor: meta?.color + '20', color: meta?.color }}
-                  >
-                    {meta?.letter?.[0]}
+              <div key={platform}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold"
+                      style={{ backgroundColor: meta?.color + '20', color: meta?.color }}
+                    >
+                      {meta?.letter?.[0]}
+                    </div>
+                    <span className="text-sm font-medium text-gray-700 dark:text-zinc-300">{meta?.name ?? platform}</span>
                   </div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-zinc-300">{meta?.name ?? platform}</span>
+                  <div className="flex items-center gap-2">
+                    {code === 'done' && (
+                      <span className="text-xs text-gray-400 dark:text-zinc-500">{status} items</span>
+                    )}
+                    {code === 'error' && (
+                      <button
+                        onClick={() => setExpandedError(isExpanded ? null : platform)}
+                        className="text-xs text-red-500 dark:text-red-400 hover:underline"
+                      >
+                        failed {isExpanded ? '▲' : '▼'}
+                      </button>
+                    )}
+                    {code === 'queued' && (
+                      <span className="text-xs text-gray-300 dark:text-zinc-700">queued</span>
+                    )}
+                    <StatusDot status={status} />
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {typeof status === 'number' && (
-                    <span className="text-xs text-gray-400 dark:text-zinc-500">{status} items</span>
-                  )}
-                  {status === 'error' && (
-                    <span className="text-xs text-red-500 dark:text-red-400">failed</span>
-                  )}
-                  {status === undefined && (
-                    <span className="text-xs text-gray-300 dark:text-zinc-700">queued</span>
-                  )}
-                  <StatusDot status={status} />
-                </div>
+                {code === 'error' && isExpanded && status?.message && (
+                  <div className="mt-2 ml-8 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-xs text-red-700 dark:text-red-300 leading-relaxed">
+                    {status.message}
+                  </div>
+                )}
               </div>
             )
           })}

@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { ArrowLeft, Download, CheckCircle2, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Download, CheckCircle2, ShieldCheck, FileSearch } from 'lucide-react'
 import ResultCard from './ResultCard'
 import { PLATFORMS, platformColor } from '../lib/platforms'
 
-export default function Results({ results, onNewScan }) {
+export default function Results({ results, onNewScan, onOpenDossier }) {
   const { flagged, totalAnalyzed } = results
   const [severityFilter, setSeverityFilter] = useState('all')
   const [platformFilter, setPlatformFilter] = useState('all')
@@ -137,8 +137,29 @@ export default function Results({ results, onNewScan }) {
             ))}
           </div>
 
+          {/* Officer's Desk CTA */}
+          {onOpenDossier && (
+            <div className="mt-6 p-5 rounded-2xl bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-500/10 dark:to-indigo-500/10 border border-violet-200 dark:border-violet-500/30">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 rounded-xl bg-violet-600 flex items-center justify-center flex-shrink-0">
+                  <FileSearch className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">See yourself through the officer's eyes</p>
+                  <p className="text-xs text-gray-500 dark:text-zinc-500">Generate a pre-interview dossier, mock interview, and prep package.</p>
+                </div>
+              </div>
+              <button
+                onClick={onOpenDossier}
+                className="w-full py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold transition-colors"
+              >
+                Open the Officer's Desk →
+              </button>
+            </div>
+          )}
+
           {/* Footer note */}
-          <div className="mt-8 p-4 rounded-2xl bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-center">
+          <div className="mt-4 p-4 rounded-2xl bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-center">
             <div className="flex items-center justify-center gap-1.5 mb-1">
               <CheckCircle2 className="w-3.5 h-3.5 text-gray-400 dark:text-zinc-500" />
               <p className="text-xs font-medium text-gray-500 dark:text-zinc-500">Nothing was deleted automatically</p>

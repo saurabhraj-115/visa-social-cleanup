@@ -4,6 +4,14 @@ import config
 from platforms import ContentItem
 
 
+INSTAGRAM_HELP = (
+    "Instagram login failed. This is common — Instagram aggressively blocks "
+    "automated logins. Try: (1) log in manually on instagram.com first, "
+    "(2) disable 2FA temporarily, or (3) use a fresh session from a new network. "
+    "Your other platforms were still scanned."
+)
+
+
 def fetch_items(limit: int = None) -> list[ContentItem]:
     if not config.INSTAGRAM_USERNAME or not config.INSTAGRAM_PASSWORD:
         raise RuntimeError("Instagram credentials not configured")
@@ -11,8 +19,7 @@ def fetch_items(limit: int = None) -> list[ContentItem]:
     try:
         cl.login(config.INSTAGRAM_USERNAME, config.INSTAGRAM_PASSWORD)
     except Exception as e:
-        print(f"[Instagram] Login failed: {e}")
-        return []
+        raise RuntimeError(INSTAGRAM_HELP) from e
 
     items: list[ContentItem] = []
 
@@ -30,7 +37,12 @@ def fetch_items(limit: int = None) -> list[ContentItem]:
                 created_at=str(media.taken_at),
                 item_id=str(media.pk),
             ))
+    except RuntimeError:
+        raise
     except Exception as e:
-        print(f"[Instagram] Could not fetch posts: {e}")
+        raise RuntimeError(
+            f"Instagram: fetched login but couldn't retrieve posts ({type(e).__name__}). "
+            "This usually means your session was invalidated. Try logging in again."
+        ) from e
 
     return items

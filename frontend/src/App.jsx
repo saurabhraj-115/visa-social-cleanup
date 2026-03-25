@@ -2,8 +2,11 @@ import { useState, useEffect, useRef } from 'react'
 import Dashboard from './components/Dashboard'
 import ScanProgress from './components/ScanProgress'
 import Results from './components/Results'
-import Setup from './components/Setup'
+import ConnectAccounts from './components/ConnectAccounts'
 import Navbar from './components/Navbar'
+import Dossier from './components/Dossier'
+import MockInterview from './components/MockInterview'
+import PrepPackage from './components/PrepPackage'
 
 function wsUrl() {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -39,6 +42,7 @@ export default function App() {
   })
 
   const [results, setResults] = useState({ flagged: [], totalAnalyzed: 0 })
+  const [dossier, setDossier] = useState(null)
   const wsRef = useRef(null)
   const scanTimeoutRef = useRef(null)
 
@@ -83,7 +87,7 @@ export default function App() {
           setProgress((p) => ({ ...p, fetchStatus: { ...p.fetchStatus, [msg.platform]: msg.count } }))
           break
         case 'fetch_error':
-          setProgress((p) => ({ ...p, fetchStatus: { ...p.fetchStatus, [msg.platform]: 'error' } }))
+          setProgress((p) => ({ ...p, fetchStatus: { ...p.fetchStatus, [msg.platform]: { code: 'error', message: msg.error } } }))
           break
         case 'analyze_start':
           setProgress((p) => ({ ...p, phase: 'analyzing', total: msg.total }))
@@ -123,6 +127,7 @@ export default function App() {
     wsRef.current?.close()
     setView('dashboard')
     setServerError(null)
+    setDossier(null)
   }
 
   const handleCredentialsSaved = (updated) => {
@@ -157,7 +162,7 @@ export default function App() {
         />
       )}
       {view === 'setup' && (
-        <Setup
+        <ConnectAccounts
           statusData={statusData}
           onBack={() => setView('dashboard')}
           onSaved={handleCredentialsSaved}
@@ -167,7 +172,33 @@ export default function App() {
         <ScanProgress progress={progress} platforms={scanConfig.platforms} onCancel={reset} />
       )}
       {view === 'results' && (
-        <Results results={results} onNewScan={reset} />
+        <Results
+          results={results}
+          onNewScan={reset}
+          onOpenDossier={() => setView('dossier')}
+        />
+      )}
+      {view === 'dossier' && (
+        <Dossier
+          results={results}
+          onBack={() => setView('results')}
+          onProceedToInterview={(d) => { setDossier(d); setView('interview') }}
+          onProceedToPrep={(d) => { setDossier(d); setView('prep') }}
+        />
+      )}
+      {view === 'interview' && (
+        <MockInterview
+          results={results}
+          dossier={dossier}
+          onBack={() => setView('dossier')}
+        />
+      )}
+      {view === 'prep' && (
+        <PrepPackage
+          results={results}
+          dossier={dossier}
+          onBack={() => setView('dossier')}
+        />
       )}
     </div>
   )
