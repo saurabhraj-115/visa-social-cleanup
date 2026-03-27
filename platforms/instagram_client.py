@@ -19,6 +19,13 @@ def fetch_items(limit: int = None) -> list[ContentItem]:
     try:
         cl.login(config.INSTAGRAM_USERNAME, config.INSTAGRAM_PASSWORD)
     except Exception as e:
+        msg = str(e)
+        if "429" in msg or "rate" in msg.lower() or "wait" in msg.lower():
+            raise RuntimeError(
+                "Instagram is rate-limiting this server (429). "
+                "Wait a few hours before trying again, or skip Instagram for now. "
+                "Your other platforms were still scanned."
+            ) from e
         raise RuntimeError(INSTAGRAM_HELP) from e
 
     items: list[ContentItem] = []

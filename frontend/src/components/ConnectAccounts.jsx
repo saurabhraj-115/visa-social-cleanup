@@ -8,6 +8,12 @@ const PLATFORMS = [
     color: '#ff4500',
     letter: 'R',
     description: 'Posts, comments, and upvotes',
+    docsUrl: 'https://www.reddit.com/prefs/apps',
+    docsLabel: 'reddit.com/prefs/apps',
+    credFields: [
+      { key: 'REDDIT_CLIENT_ID',     label: 'Client ID',     secret: false },
+      { key: 'REDDIT_CLIENT_SECRET', label: 'Client Secret', secret: true  },
+    ],
   },
   {
     id: 'twitter',
@@ -15,6 +21,12 @@ const PLATFORMS = [
     color: '#1d9bf0',
     letter: 'X',
     description: 'Tweets and likes',
+    docsUrl: 'https://developer.twitter.com',
+    docsLabel: 'developer.twitter.com',
+    credFields: [
+      { key: 'TWITTER_CLIENT_ID',     label: 'Client ID',     secret: false },
+      { key: 'TWITTER_CLIENT_SECRET', label: 'Client Secret', secret: true  },
+    ],
   },
   {
     id: 'linkedin',
@@ -22,6 +34,12 @@ const PLATFORMS = [
     color: '#0a66c2',
     letter: 'in',
     description: 'Posts and shares',
+    docsUrl: 'https://www.linkedin.com/developers',
+    docsLabel: 'linkedin.com/developers',
+    credFields: [
+      { key: 'LINKEDIN_CLIENT_ID',     label: 'Client ID',     secret: false },
+      { key: 'LINKEDIN_CLIENT_SECRET', label: 'Client Secret', secret: true  },
+    ],
   },
   {
     id: 'facebook',
@@ -29,12 +47,42 @@ const PLATFORMS = [
     color: '#1877f2',
     letter: 'F',
     description: 'Posts and reactions',
+    docsUrl: 'https://developers.facebook.com/apps',
+    docsLabel: 'developers.facebook.com',
+    credFields: [
+      { key: 'FACEBOOK_APP_ID',     label: 'App ID',     secret: false },
+      { key: 'FACEBOOK_APP_SECRET', label: 'App Secret', secret: true  },
+    ],
   },
 ]
 
 function PlatformCard({ platform, connected, serverReady, onConnect, onDisconnect }) {
   const [connecting, setConnecting] = useState(false)
   const [error, setError] = useState(null)
+  const [configuring, setConfiguring] = useState(false)
+  const [fields, setFields] = useState({})
+  const [saving, setSaving] = useState(false)
+
+  const saveAndConnect = async () => {
+    const hasAll = platform.credFields.every((f) => fields[f.key]?.trim())
+    if (!hasAll) { setError('Fill in all fields first.'); return }
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fields),
+      })
+      if (!res.ok) throw new Error('Failed to save credentials')
+      setSaving(false)
+      setConfiguring(false)
+      openPopup()
+    } catch (e) {
+      setError(e.message)
+      setSaving(false)
+    }
+  }
 
   const openPopup = () => {
     setConnecting(true)
@@ -101,7 +149,12 @@ function PlatformCard({ platform, connected, serverReady, onConnect, onDisconnec
         {/* Action */}
         <div className="flex-shrink-0">
           {!serverReady ? (
-            <span className="text-xs text-gray-400 dark:text-zinc-600 italic">server setup needed</span>
+            <button
+              onClick={() => setConfiguring((c) => !c)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors"
+            >
+              Configure
+            </button>
           ) : connected ? (
             <button
               onClick={() => onDisconnect(platform.id)}
@@ -122,6 +175,27 @@ function PlatformCard({ platform, connected, serverReady, onConnect, onDisconnec
           )}
         </div>
       </div>
+
+      {configuring && !connected && (
+        <div className="mt-3 border-t border-gray-100 dark:border-zinc-800 pt-3 space-y-2.5">
+          <p className="text-xs text-gray-400 dark:text-zinc-500">
+            Create an app at <a href={platform.docsUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-600">{platform.docsLabel}</a> and paste the credentials below.
+          </p>
+          {platform.credFields.map((f) =>
+            f.secret
+              ? <SecretInput key={f.key} label={f.label} envKey={f.key} onSave={(k, v) => setFields((prev) => ({ ...prev, [k]: v }))} />
+              : <PlainInput  key={f.key} label={f.label} envKey={f.key} onSave={(k, v) => setFields((prev) => ({ ...prev, [k]: v }))} />
+          )}
+          <button
+            onClick={saveAndConnect}
+            disabled={saving}
+            className="w-full py-2 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-60"
+            style={{ backgroundColor: platform.color }}
+          >
+            {saving ? 'Saving…' : 'Save & Connect →'}
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="mt-3 flex items-start gap-2 px-3 py-2 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-xs text-red-700 dark:text-red-300">

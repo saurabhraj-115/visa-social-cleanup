@@ -7,6 +7,7 @@ import Navbar from './components/Navbar'
 import Dossier from './components/Dossier'
 import MockInterview from './components/MockInterview'
 import PrepPackage from './components/PrepPackage'
+import QuickSetupModal from './components/QuickSetupModal'
 
 function wsUrl() {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -43,6 +44,7 @@ export default function App() {
 
   const [results, setResults] = useState({ flagged: [], totalAnalyzed: 0 })
   const [dossier, setDossier] = useState(null)
+  const [quickSetupPlatforms, setQuickSetupPlatforms] = useState(null) // null = hidden
   const wsRef = useRef(null)
   const scanTimeoutRef = useRef(null)
 
@@ -61,6 +63,17 @@ export default function App() {
   }, [])
 
   const startScan = () => {
+    // Check which selected platforms are not yet configured
+    const unconfigured = scanConfig.platforms.filter((p) => !platformStatus?.[p])
+    if (unconfigured.length > 0) {
+      setQuickSetupPlatforms(unconfigured)
+      return
+    }
+    doStartScan()
+  }
+
+  const doStartScan = () => {
+    setQuickSetupPlatforms(null)
     setServerError(null)
     setProgress({ phase: 'connecting', fetchStatus: {}, analyzed: 0, total: 0, flaggedCount: 0, lastPlatform: null })
     setResults({ flagged: [], totalAnalyzed: 0 })
@@ -139,10 +152,33 @@ export default function App() {
     setScanConfig((c) => ({ ...c, platforms: configured }))
   }
 
+  const handleQuickSetupDone = () => {
+    // Re-fetch status so platformStatus is up-to-date, then scan
+    fetch('/api/status')
+      .then((r) => r.json())
+      .then((data) => {
+        setStatusData(data)
+        setPlatformStatus(data.platforms ?? {})
+        setQuickSetupPlatforms(null)
+        doStartScan()
+      })
+      .catch(() => {
+        setQuickSetupPlatforms(null)
+        doStartScan()
+      })
+  }
+
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-zinc-950 text-gray-900 dark:text-zinc-100 transition-colors duration-200">
+      {quickSetupPlatforms && (
+        <QuickSetupModal
+          platforms={quickSetupPlatforms}
+          onDone={handleQuickSetupDone}
+          onClose={() => setQuickSetupPlatforms(null)}
+        />
+      )}
       <Navbar
         theme={theme}
         onToggleTheme={toggleTheme}
