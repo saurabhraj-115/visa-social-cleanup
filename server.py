@@ -341,6 +341,108 @@ async def twitter_following_ws(websocket: WebSocket):
             pass
 
 
+@app.post("/api/instagram/parse-curl")
+def instagram_parse_curl(request: Request, body: dict):
+    """Parse a cURL command, extract cookies, store server-side, return user info."""
+    origin = request.headers.get("origin", "")
+    if not any(origin.startswith(o) for o in _allowed_origins):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    curl_text = body.get("curl", "")
+    if not curl_text:
+        raise HTTPException(status_code=400, detail="curl field required")
+    try:
+        from platforms import instagram_client as igc
+        cookies = igc.parse_cookies_from_curl(curl_text)
+        token_store.set_token("instagram_following", {"cookies": cookies})
+        return {"ok": True, "user_id": cookies.get("ds_user_id")}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.websocket("/ws/instagram/following")
+async def instagram_following_ws(websocket: WebSocket):
+    """Stream Instagram following fetch + bio scan."""
+    await websocket.accept()
+    loop = asyncio.get_event_loop()
+    try:
+        from platforms import instagram_client as igc
+        stored = token_store.get_token("instagram_following")
+        if not stored or not stored.get("cookies"):
+            await websocket.send_json({"type": "error", "error": "No Instagram session — paste a cURL first."})
+            return
+
+        cookies = stored["cookies"]
+        queue: asyncio.Queue = asyncio.Queue()
+        _DONE = object()
+
+        def run():
+            try:
+                def on_following(count, _phase):
+                    loop.call_soon_threadsafe(queue.put_nowait, {
+                        "type": "progress", "phase": "following", "count": count,
+                    })
+
+                accounts = igc.fetch_following_ig(cookies, progress_cb=on_following)
+                loop.call_soon_threadsafe(queue.put_nowait, {
+                    "type": "fetch_done", "total": len(accounts),
+                })
+
+                def on_bio(current, total):
+                    loop.call_soon_threadsafe(queue.put_nowait, {
+                        "type": "bio_progress", "current": current, "total": total,
+                    })
+
+                results = igc.scan_following_ig(accounts, cookies, progress_cb=on_bio)
+                loop.call_soon_threadsafe(queue.put_nowait, {
+                    "type": "done",
+                    "red_flags": results["red_flags"],
+                    "political": results["political"],
+                    "journalists": results["journalists"],
+                    "clean_count": len(results["clean"]),
+                    "total": len(accounts),
+                })
+            except Exception as exc:
+                loop.call_soon_threadsafe(queue.put_nowait, {"type": "error", "error": str(exc)})
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, _DONE)
+
+        loop.run_in_executor(executor, run)
+
+        while True:
+            msg = await queue.get()
+            if msg is _DONE:
+                break
+            await websocket.send_json(msg)
+
+    except WebSocketDisconnect:
+        pass
+    except Exception as exc:
+        try:
+            await websocket.send_json({"type": "error", "error": str(exc)})
+        except Exception:
+            pass
+
+
+@app.post("/api/instagram/unfollow")
+async def instagram_unfollow(body: dict):
+    pks = body.get("pks", [])
+    if not pks:
+        return {"ok": False, "error": "No pks provided"}
+    stored = token_store.get_token("instagram_following")
+    if not stored or not stored.get("cookies"):
+        return {"ok": False, "error": "No Instagram session — paste a cURL first."}
+    cookies = stored["cookies"]
+    from platforms import instagram_client as igc
+    try:
+        results = await asyncio.get_event_loop().run_in_executor(
+            executor, lambda: igc.unfollow_users_ig(pks, cookies)
+        )
+        succeeded = sum(1 for r in results if r["ok"])
+        return {"ok": True, "succeeded": succeeded, "failed": len(results) - succeeded, "results": results}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
+
 @app.post("/api/twitter/unfollow")
 async def twitter_unfollow(body: dict):
     user_ids = body.get("user_ids", [])

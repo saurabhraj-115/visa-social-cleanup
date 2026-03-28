@@ -9,6 +9,7 @@ import MockInterview from './components/MockInterview'
 import PrepPackage from './components/PrepPackage'
 import QuickSetupModal from './components/QuickSetupModal'
 import TwitterFollowingAudit from './components/TwitterFollowingAudit'
+import InstagramFollowingAudit from './components/InstagramFollowingAudit'
 
 function wsUrl() {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -196,6 +197,7 @@ export default function App() {
           onStartScan={startScan}
           onOpenSetup={() => setView('setup')}
           onOpenFollowingAudit={() => setView('twitter-following')}
+          onOpenIgAudit={() => setView('instagram-following')}
           error={serverError}
         />
       )}
@@ -243,6 +245,9 @@ export default function App() {
           statusData={statusData}
           onBack={() => setView('dashboard')}
         />
+      )}
+      {view === 'instagram-following' && (
+        <InstagramFollowingAudit onBack={() => setView('dashboard')} />
       )}
     </div>
   )
