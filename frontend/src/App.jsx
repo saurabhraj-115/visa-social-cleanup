@@ -8,6 +8,7 @@ import Dossier from './components/Dossier'
 import MockInterview from './components/MockInterview'
 import PrepPackage from './components/PrepPackage'
 import QuickSetupModal from './components/QuickSetupModal'
+import TwitterFollowingAudit from './components/TwitterFollowingAudit'
 
 function wsUrl() {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -194,6 +195,7 @@ export default function App() {
           setScanConfig={setScanConfig}
           onStartScan={startScan}
           onOpenSetup={() => setView('setup')}
+          onOpenFollowingAudit={() => setView('twitter-following')}
           error={serverError}
         />
       )}
@@ -234,6 +236,12 @@ export default function App() {
           results={results}
           dossier={dossier}
           onBack={() => setView('dossier')}
+        />
+      )}
+      {view === 'twitter-following' && (
+        <TwitterFollowingAudit
+          statusData={statusData}
+          onBack={() => setView('dashboard')}
         />
       )}
     </div>

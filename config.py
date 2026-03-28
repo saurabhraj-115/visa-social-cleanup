@@ -25,6 +25,10 @@ REDDIT_REFRESH_TOKEN = get("REDDIT_REFRESH_TOKEN")  # auto-saved after first OAu
 # Twitter/X — OAuth 2.0 (developer.twitter.com → your app → Settings → OAuth 2.0)
 TWITTER_CLIENT_ID     = get("TWITTER_CLIENT_ID")
 TWITTER_CLIENT_SECRET = get("TWITTER_CLIENT_SECRET")
+# Twitter/X — OAuth 1.0a Consumer Keys (developer.twitter.com → your app → Keys and tokens)
+# Used for following list audit (v2 following API requires paid tier)
+TWITTER_API_KEY    = get("TWITTER_API_KEY")
+TWITTER_API_SECRET = get("TWITTER_API_SECRET")
 # Legacy bearer-token fields kept for backward compatibility
 TWITTER_BEARER_TOKEN = get("TWITTER_BEARER_TOKEN")
 TWITTER_USERNAME     = get("TWITTER_USERNAME")

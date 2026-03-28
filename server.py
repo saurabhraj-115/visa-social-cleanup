@@ -49,6 +49,7 @@ _CRED_KEYS = {
     "ANTHROPIC_API_KEY",
     "REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET",
     "TWITTER_CLIENT_ID", "TWITTER_CLIENT_SECRET",
+    "TWITTER_API_KEY", "TWITTER_API_SECRET",
     "FACEBOOK_APP_ID", "FACEBOOK_APP_SECRET",
     "INSTAGRAM_USERNAME", "INSTAGRAM_PASSWORD",
     "LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET",
@@ -78,8 +79,10 @@ def get_status():
             "twitter":  _cfg("TWITTER_CLIENT_ID", "TWITTER_CLIENT_SECRET"),
             "facebook": _cfg("FACEBOOK_APP_ID", "FACEBOOK_APP_SECRET"),
             "linkedin": _cfg("LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET"),
+            "twitter_following": _cfg("TWITTER_API_KEY", "TWITTER_API_SECRET"),
         },
         "has_anthropic_key": bool(config.ANTHROPIC_API_KEY),
+        "twitter_following_connected": connected.get("twitter_following", False),
     }
 
 
@@ -274,6 +277,75 @@ async def scan_ws(websocket: WebSocket):
             await websocket.send_json({"type": "error", "error": str(exc)})
         except Exception:
             pass
+
+
+@app.websocket("/ws/twitter/following")
+async def twitter_following_ws(websocket: WebSocket):
+    """Stream following list fetch + bio scan results."""
+    await websocket.accept()
+    loop = asyncio.get_event_loop()
+    try:
+        from platforms import twitter_client as tc
+        queue: asyncio.Queue = asyncio.Queue()
+        _DONE = object()
+
+        def run():
+            try:
+                def on_progress(count, phase):
+                    loop.call_soon_threadsafe(queue.put_nowait, {
+                        "type": "progress", "phase": phase, "count": count,
+                    })
+
+                accounts = tc.fetch_following(progress_cb=on_progress)
+                loop.call_soon_threadsafe(queue.put_nowait, {
+                    "type": "fetch_done", "total": len(accounts),
+                })
+
+                results = tc.scan_following(accounts)
+                loop.call_soon_threadsafe(queue.put_nowait, {
+                    "type": "done",
+                    "red_flags": results["red_flags"],
+                    "political": results["political"],
+                    "journalists": results["journalists"],
+                    "clean_count": len(results["clean"]),
+                    "total": len(accounts),
+                })
+            except Exception as exc:
+                loop.call_soon_threadsafe(queue.put_nowait, {"type": "error", "error": str(exc)})
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, _DONE)
+
+        loop.run_in_executor(executor, run)
+
+        while True:
+            msg = await queue.get()
+            if msg is _DONE:
+                break
+            await websocket.send_json(msg)
+
+    except WebSocketDisconnect:
+        pass
+    except Exception as exc:
+        try:
+            await websocket.send_json({"type": "error", "error": str(exc)})
+        except Exception:
+            pass
+
+
+@app.post("/api/twitter/unfollow")
+async def twitter_unfollow(body: dict):
+    user_ids = body.get("user_ids", [])
+    if not user_ids:
+        return {"ok": False, "error": "No user IDs provided"}
+    from platforms import twitter_client as tc
+    try:
+        results = await asyncio.get_event_loop().run_in_executor(
+            executor, lambda: tc.unfollow_users(user_ids)
+        )
+        succeeded = sum(1 for r in results if r["ok"])
+        return {"ok": True, "succeeded": succeeded, "failed": len(results) - succeeded, "results": results}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
 
 
 # Serve built frontend in production (after `npm run build`)

@@ -1,4 +1,4 @@
-import { ArrowRight, AlertCircle, Sparkles, ChevronRight } from 'lucide-react'
+import { ArrowRight, AlertCircle, Sparkles, ChevronRight, Users } from 'lucide-react'
 import PlatformCard from './PlatformCard'
 
 const ALL_PLATFORMS = ['reddit', 'twitter', 'facebook', 'instagram', 'linkedin']
@@ -17,7 +17,7 @@ const LIMIT_OPTIONS = [
   { value: '200', label: 'Last 200'  },
 ]
 
-export default function Dashboard({ platformStatus, statusData, scanConfig, setScanConfig, onStartScan, onOpenSetup, error }) {
+export default function Dashboard({ platformStatus, statusData, scanConfig, setScanConfig, onStartScan, onOpenSetup, onOpenFollowingAudit, error }) {
   const isLoading = platformStatus === null
   const nothingConfigured = !isLoading && !statusData?.has_anthropic_key && Object.values(platformStatus ?? {}).every((v) => !v)
   const configuredCount = Object.values(platformStatus ?? {}).filter(Boolean).length
@@ -98,6 +98,23 @@ export default function Dashboard({ platformStatus, statusData, scanConfig, setS
               ))}
         </div>
       </section>
+
+      {/* ── Twitter Following Audit entry ──────────────────── */}
+      {!isLoading && platformStatus?.twitter && (
+        <button
+          onClick={onOpenFollowingAudit}
+          className="w-full mb-2 flex items-center gap-3 p-3.5 rounded-2xl border border-[#1d9bf030] bg-[#1d9bf008] hover:bg-[#1d9bf015] transition-colors text-left group"
+        >
+          <div className="w-8 h-8 rounded-xl bg-[#1d9bf020] flex items-center justify-center flex-shrink-0">
+            <Users className="w-4 h-4 text-[#1d9bf0]" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-[#1d9bf0]">Twitter Following Audit</p>
+            <p className="text-xs text-gray-500 dark:text-zinc-500">Scan who you follow for red flags & journalist accounts</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-[#1d9bf0] group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
+        </button>
+      )}
 
       {/* ── Settings ───────────────────────────────────────── */}
       <section className="mb-6 card p-5">

@@ -15,6 +15,7 @@ import secrets
 import time
 import urllib.parse
 import requests
+import tweepy
 
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -284,6 +285,56 @@ def facebook_callback(code: str = None, state: str = None, error: str = None, er
         "expires_at": time.time() + expires_in - 60,
     })
     return _success_html("facebook")
+
+
+# ── Twitter Following Audit — OAuth 1.0a ─────────────────────────────────────
+# Uses Consumer Key/Secret (TWITTER_API_KEY / TWITTER_API_SECRET) to get
+# OAuth 1.0a tokens that give access to the v1.1 friends/ids API (free tier).
+
+_pending_oauth1: dict[str, str] = {}  # oauth_token -> oauth_token_secret
+
+
+@router.get("/twitter_following/start")
+def twitter_following_start():
+    if not config.TWITTER_API_KEY or not config.TWITTER_API_SECRET:
+        return _error_html("twitter_following", "Twitter API Key and Secret not configured. Add them in Settings first.")
+    callback = f"{CALLBACK_BASE}/twitter_following/callback"
+    auth = tweepy.OAuth1UserHandler(
+        config.TWITTER_API_KEY,
+        config.TWITTER_API_SECRET,
+        callback=callback,
+    )
+    try:
+        redirect_url = auth.get_authorization_url()
+        _pending_oauth1[auth.request_token["oauth_token"]] = auth.request_token["oauth_token_secret"]
+        return RedirectResponse(redirect_url)
+    except Exception as e:
+        return _error_html("twitter_following", f"Failed to start OAuth: {e}")
+
+
+@router.get("/twitter_following/callback")
+def twitter_following_callback(oauth_token: str = None, oauth_verifier: str = None, denied: str = None):
+    if denied or not oauth_token or not oauth_verifier:
+        return _error_html("twitter_following", "Authorization was denied.")
+    secret = _pending_oauth1.pop(oauth_token, None)
+    if not secret:
+        return _error_html("twitter_following", "OAuth state mismatch — try connecting again.")
+    auth = tweepy.OAuth1UserHandler(config.TWITTER_API_KEY, config.TWITTER_API_SECRET)
+    auth.request_token = {"oauth_token": oauth_token, "oauth_token_secret": secret}
+    try:
+        access_token, access_token_secret = auth.get_access_token(oauth_verifier)
+        # Verify and store user info alongside tokens
+        api = tweepy.API(auth)
+        me = api.verify_credentials()
+        token_store.set_token("twitter_following", {
+            "access_token": access_token,
+            "access_token_secret": access_token_secret,
+            "user_id": str(me.id),
+            "screen_name": me.screen_name,
+        })
+        return _success_html("twitter_following")
+    except Exception as e:
+        return _error_html("twitter_following", str(e))
 
 
 # ── Disconnect ────────────────────────────────────────────────────────────────

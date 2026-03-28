@@ -24,8 +24,10 @@ const PLATFORMS = [
     docsUrl: 'https://developer.twitter.com',
     docsLabel: 'developer.twitter.com',
     credFields: [
-      { key: 'TWITTER_CLIENT_ID',     label: 'Client ID',     secret: false },
-      { key: 'TWITTER_CLIENT_SECRET', label: 'Client Secret', secret: true  },
+      { key: 'TWITTER_CLIENT_ID',     label: 'Client ID (OAuth 2.0)',     secret: false },
+      { key: 'TWITTER_CLIENT_SECRET', label: 'Client Secret (OAuth 2.0)', secret: true  },
+      { key: 'TWITTER_API_KEY',       label: 'API Key / Consumer Key (for Following Audit)',    secret: false },
+      { key: 'TWITTER_API_SECRET',    label: 'API Secret / Consumer Secret (for Following Audit)', secret: true  },
     ],
   },
   {
