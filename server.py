@@ -9,7 +9,7 @@ from pathlib import Path
 import os
 
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -87,8 +87,17 @@ def get_status():
 
 
 @app.post("/api/credentials")
-def update_credentials(body: dict):
+def update_credentials(request: Request, body: dict):
     """Save non-empty credential values to .env and hot-reload config."""
+    # Accept requests that come from our own frontend (browser enforces Origin header)
+    # or carry a valid ADMIN_SECRET token for non-browser access.
+    origin = request.headers.get("origin", "")
+    admin_token = request.headers.get("x-admin-token", "")
+    origin_ok = any(origin.startswith(o) for o in _allowed_origins) if origin else False
+    token_ok = bool(config.ADMIN_SECRET and admin_token == config.ADMIN_SECRET)
+    if not origin_ok and not token_ok:
+        raise HTTPException(status_code=403, detail="Forbidden: valid Origin or X-Admin-Token required")
+
     from urllib.parse import unquote
     for key, value in body.items():
         if key in _CRED_KEYS and isinstance(value, str) and value.strip():

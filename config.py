@@ -14,6 +14,10 @@ def get(key: str, required: bool = False) -> str:
         raise EnvironmentError(f"Missing required environment variable: {key}")
     return val
 
+# Admin — optional secret for non-browser access to /api/credentials
+# Set as a Fly secret: fly secrets set ADMIN_SECRET=<random string>
+ADMIN_SECRET = get("ADMIN_SECRET")
+
 # Anthropic
 ANTHROPIC_API_KEY = get("ANTHROPIC_API_KEY")
 

@@ -171,3 +171,15 @@ The app uses a persistent Fly volume (`/data`) for token and credential storage 
 - Content sent only to the Anthropic Claude API for analysis
 - Nothing is auto-deleted — you review and confirm every action
 - Following audit unfollows require explicit confirmation with a 0.5s delay between each
+- `/api/credentials` is protected: only accepts requests from the app's own origin (browser-enforced) or a valid `X-Admin-Token` header matching the `ADMIN_SECRET` env var
+- OAuth popup `postMessage` handlers validate `event.origin` before processing — prevents cross-origin message injection
+
+### Hardening the hosted version
+
+Set an `ADMIN_SECRET` on Fly to prevent unauthenticated credential writes:
+
+```bash
+fly secrets set ADMIN_SECRET=$(openssl rand -hex 32)
+```
+
+Non-browser access to `/api/credentials` then requires `X-Admin-Token: <secret>` in the request header.

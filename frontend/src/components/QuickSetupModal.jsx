@@ -99,6 +99,7 @@ function OAuthPlatformSection({ platformId, onConfigured }) {
       'width=600,height=700,scrollbars=yes,resizable=yes'
     )
     const onMessage = (e) => {
+      if (e.origin !== window.location.origin) return
       if (e.data?.platform !== platformId) return
       window.removeEventListener('message', onMessage)
       clearInterval(pollClosed)

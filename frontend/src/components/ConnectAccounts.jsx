@@ -97,6 +97,7 @@ function PlatformCard({ platform, connected, serverReady, onConnect, onDisconnec
     )
 
     const onMessage = (e) => {
+      if (e.origin !== window.location.origin) return
       if (e.data?.platform !== platform.id) return
       window.removeEventListener('message', onMessage)
       clearInterval(pollClosed)

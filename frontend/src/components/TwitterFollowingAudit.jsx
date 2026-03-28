@@ -35,6 +35,7 @@ function ConnectSection({ credentialsConfigured, onConnected }) {
     setConnecting(true); setError(null)
     const popup = window.open('/oauth/twitter_following/start', 'oauth_tf', 'width=600,height=700,scrollbars=yes')
     const onMsg = (e) => {
+      if (e.origin !== window.location.origin) return
       if (e.data?.platform !== 'twitter_following') return
       window.removeEventListener('message', onMsg)
       clearInterval(poll)
