@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react'
-import { ArrowLeft, AlertTriangle, Newspaper, Check, Loader2, ExternalLink, Users, Landmark, ChevronDown, ChevronUp } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { ArrowLeft, AlertTriangle, Newspaper, Check, Loader2, ExternalLink, Users, Landmark, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
 
 function wsUrl() {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -8,7 +8,7 @@ function wsUrl() {
 
 // ── Curl paste section ────────────────────────────────────────────────────────
 
-function CurlSection({ onReady }) {
+function CurlSection({ onReady, expiredMessage }) {
   const [curl, setCurl] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -32,14 +32,16 @@ function CurlSection({ onReady }) {
 
   return (
     <div className="space-y-4">
+      {expiredMessage && (
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
+          <RefreshCw className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+          <p className="text-sm text-amber-700 dark:text-amber-300">{expiredMessage}</p>
+        </div>
+      )}
       <div className="card p-5 space-y-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)', opacity: 0.15 }}/>
-          <div className="absolute w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 -translate-x-[0px]"
-            style={{position:'relative',background:'linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)'}}>
-            <span className="text-white font-bold text-sm">IG</span>
-          </div>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+            style={{ background: 'linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)' }}>IG</div>
           <div>
             <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Instagram Following Audit</p>
             <p className="text-xs text-gray-500 dark:text-zinc-500">Uses your browser session — no API keys needed</p>
@@ -395,17 +397,24 @@ function Results({ data, onNewScan }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function InstagramFollowingAudit({ onBack }) {
-  const [phase, setPhase] = useState('idle') // idle | fetching | scanning | done | error
+  const [phase, setPhase] = useState('idle') // idle | fetching | scanning | done | error | expired
   const [progress, setProgress] = useState({ phase: null, count: 0 })
   const [bioProgress, setBioProgress] = useState({ current: 0, total: 0 })
   const [results, setResults] = useState(null)
   const [error, setError] = useState(null)
-  const [sessionReady, setSessionReady] = useState(false)
+  // null = unknown (checking), false = no session, true = session stored
+  const [sessionReady, setSessionReady] = useState(null)
   const wsRef = useRef(null)
 
-  const handleSessionReady = (_userId) => {
-    setSessionReady(true)
-  }
+  // On mount: check if a session is already stored — skip the curl paste if so
+  useEffect(() => {
+    fetch('/api/instagram/session-status')
+      .then((r) => r.json())
+      .then((d) => setSessionReady(d.stored ? true : false))
+      .catch(() => setSessionReady(false))
+  }, [])
+
+  const handleSessionReady = () => setSessionReady(true)
 
   const startAudit = () => {
     setPhase('fetching')
@@ -430,6 +439,12 @@ export default function InstagramFollowingAudit({ onBack }) {
         setResults(msg)
         setPhase('done')
         ws.close()
+      } else if (msg.type === 'session_expired') {
+        // Drop back to the curl paste screen with a prominent message
+        setSessionReady(false)
+        setPhase('idle')
+        setError(msg.error || 'Your Instagram session expired. Paste a fresh cURL to continue.')
+        ws.close()
       } else if (msg.type === 'error') {
         setError(msg.error)
         setPhase('error')
@@ -437,7 +452,7 @@ export default function InstagramFollowingAudit({ onBack }) {
       }
     }
 
-    ws.onerror = () => { setError('WebSocket error.'); setPhase('error') }
+    ws.onerror = () => { setError('WebSocket connection error.'); setPhase('error') }
   }
 
   const reset = () => {
@@ -448,6 +463,15 @@ export default function InstagramFollowingAudit({ onBack }) {
     setError(null)
     setProgress({ phase: null, count: 0 })
     setBioProgress({ current: 0, total: 0 })
+  }
+
+  // Still checking session status
+  if (sessionReady === null) {
+    return (
+      <main className="max-w-2xl mx-auto px-4 py-10 flex items-center justify-center">
+        <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+      </main>
+    )
   }
 
   return (
@@ -470,20 +494,28 @@ export default function InstagramFollowingAudit({ onBack }) {
       </div>
 
       {!sessionReady ? (
-        <CurlSection onReady={handleSessionReady} />
+        // Show paste form — with expired banner if session just died mid-scan
+        <CurlSection onReady={handleSessionReady} expiredMessage={error} />
       ) : phase === 'idle' ? (
-        <div className="card p-6 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Users className="w-5 h-5" style={{ color: '#e1306c' }} />
-            <div>
-              <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Session ready</p>
-              <p className="text-xs text-gray-500 dark:text-zinc-500">Will fetch your full following list and scan each bio</p>
+        <div className="card p-6 space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <Users className="w-5 h-5 flex-shrink-0" style={{ color: '#e1306c' }} />
+              <div>
+                <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Session ready</p>
+                <p className="text-xs text-gray-500 dark:text-zinc-500">Will fetch your full following list and scan each bio</p>
+              </div>
             </div>
+            <button onClick={startAudit}
+              className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white flex-shrink-0 transition-opacity hover:opacity-90"
+              style={{ background: 'linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)' }}>
+              Start audit →
+            </button>
           </div>
-          <button onClick={startAudit}
-            className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white flex-shrink-0 transition-opacity hover:opacity-90"
-            style={{ background: 'linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)' }}>
-            Start audit →
+          {/* Escape hatch — replace cached session */}
+          <button onClick={() => setSessionReady(false)}
+            className="w-full text-xs text-gray-400 dark:text-zinc-600 hover:text-gray-600 dark:hover:text-zinc-400 transition-colors py-1 flex items-center justify-center gap-1.5">
+            <RefreshCw className="w-3 h-3" /> Use a different session
           </button>
         </div>
       ) : phase === 'fetching' || phase === 'scanning' ? (
@@ -498,7 +530,7 @@ export default function InstagramFollowingAudit({ onBack }) {
             <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
             <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
           </div>
-          <button onClick={reset}
+          <button onClick={() => setPhase('idle')}
             className="w-full py-2.5 rounded-xl text-sm font-medium border border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors">
             Try again
           </button>

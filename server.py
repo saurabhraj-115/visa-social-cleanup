@@ -341,6 +341,12 @@ async def twitter_following_ws(websocket: WebSocket):
             pass
 
 
+@app.get("/api/instagram/session-status")
+def instagram_session_status():
+    stored = token_store.get_token("instagram_following")
+    return {"stored": bool(stored and stored.get("cookies"))}
+
+
 @app.post("/api/instagram/parse-curl")
 def instagram_parse_curl(request: Request, body: dict):
     """Parse a cURL command, extract cookies, store server-side, return user info."""
@@ -401,6 +407,8 @@ async def instagram_following_ws(websocket: WebSocket):
                     "clean_count": len(results["clean"]),
                     "total": len(accounts),
                 })
+            except PermissionError as exc:
+                loop.call_soon_threadsafe(queue.put_nowait, {"type": "session_expired", "error": str(exc)})
             except Exception as exc:
                 loop.call_soon_threadsafe(queue.put_nowait, {"type": "error", "error": str(exc)})
             finally:

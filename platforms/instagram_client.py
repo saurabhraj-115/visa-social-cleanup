@@ -176,6 +176,8 @@ def fetch_following_ig(cookies: dict, progress_cb=None) -> list:
         if resp.status_code == 429:
             time.sleep(60)
             continue
+        if resp.status_code in (401, 403):
+            raise PermissionError("Instagram session expired — paste a fresh cURL to continue.")
         resp.raise_for_status()
         data = resp.json()
 
