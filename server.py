@@ -70,7 +70,7 @@ def get_status():
             "reddit":    connected.get("reddit", False),
             "twitter":   connected.get("twitter", False),
             "facebook":  connected.get("facebook", False),
-            "instagram": _cfg("INSTAGRAM_USERNAME", "INSTAGRAM_PASSWORD"),
+            "instagram": connected.get("instagram_following", False) or _cfg("INSTAGRAM_USERNAME", "INSTAGRAM_PASSWORD"),
             "linkedin":  connected.get("linkedin", False),
         },
         # True = client_id/secret are saved (needed before OAuth popup)

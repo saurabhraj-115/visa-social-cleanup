@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { X, Check, Loader2, Eye, EyeOff, AlertCircle, ExternalLink } from 'lucide-react'
+// Eye/EyeOff used by FieldInput for OAuth secret fields
 
 const PLATFORM_META = {
   reddit: {
@@ -181,35 +182,34 @@ function OAuthPlatformSection({ platformId, onConfigured }) {
 }
 
 function InstagramSection({ onConfigured }) {
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [show, setShow] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const [curl, setCurl] = useState('')
+  const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
+  const [error, setError] = useState(null)
+  const [showInstructions, setShowInstructions] = useState(false)
 
-  const save = async () => {
-    if (!username || !password) return
-    setSaving(true)
+  const parse = async () => {
+    if (!curl.trim()) { setError('Paste a cURL command first.'); return }
+    setLoading(true); setError(null)
     try {
-      const res = await fetch('/api/credentials', {
+      const res = await fetch('/api/instagram/parse-curl', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ INSTAGRAM_USERNAME: username, INSTAGRAM_PASSWORD: password }),
+        body: JSON.stringify({ curl: curl.trim() }),
       })
-      if (res.ok) {
-        setDone(true)
-        onConfigured('instagram')
-      }
-    } finally {
-      setSaving(false)
-    }
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail || 'Failed to parse cURL')
+      setDone(true)
+      onConfigured('instagram')
+    } catch (e) { setError(e.message) }
+    setLoading(false)
   }
 
   if (done) {
     return (
       <div className="flex items-center gap-2 py-2 px-3 rounded-xl bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20">
         <div className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold bg-pink-100 dark:bg-pink-500/20 text-pink-600 flex-shrink-0">IG</div>
-        <span className="text-sm text-green-700 dark:text-green-400 font-medium">Instagram credentials saved</span>
+        <span className="text-sm text-green-700 dark:text-green-400 font-medium">Instagram session connected</span>
         <Check className="w-4 h-4 text-green-600 dark:text-green-400 ml-auto" />
       </div>
     )
@@ -220,23 +220,30 @@ function InstagramSection({ onConfigured }) {
       <div className="flex items-center gap-3">
         <div className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold bg-pink-100 dark:bg-pink-500/20 text-pink-600 flex-shrink-0">IG</div>
         <span className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Instagram</span>
-        <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400 font-medium">No public OAuth</span>
+        <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-500/15 text-violet-600 dark:text-violet-400 font-medium">Browser session</span>
       </div>
-      <div className="space-y-2">
-        <input type="text" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)}
-          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-sm text-gray-900 dark:text-zinc-200 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-500/40 focus:border-pink-500 transition-all" />
-        <div className="relative">
-          <input type={show ? 'text' : 'password'} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-3 py-2 pr-9 rounded-xl bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-sm text-gray-900 dark:text-zinc-200 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-500/40 focus:border-pink-500 transition-all" />
-          <button type="button" onClick={() => setShow((s) => !s)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400">
-            {show ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-          </button>
-        </div>
-      </div>
-      <button onClick={save} disabled={saving || !username || !password}
-        className="w-full py-2 rounded-xl text-sm font-semibold text-white bg-[#e1306c] hover:bg-[#c9175a] disabled:opacity-40 transition-colors">
-        {saving ? 'Saving…' : 'Save credentials'}
+      <button onClick={() => setShowInstructions(s => !s)}
+        className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-zinc-300 underline text-left">
+        {showInstructions ? 'Hide instructions ▲' : 'How to get a cURL ▼'}
       </button>
+      {showInstructions && (
+        <ol className="text-xs text-gray-500 dark:text-zinc-500 space-y-1 pl-4 list-decimal leading-relaxed">
+          <li>Open <strong>instagram.com</strong> in Chrome (logged in)</li>
+          <li>Open DevTools → <strong>Network</strong> tab</li>
+          <li>Refresh the page</li>
+          <li>Right-click any request → <strong>Copy as cURL (bash)</strong></li>
+          <li>Paste below</li>
+        </ol>
+      )}
+      <textarea value={curl} onChange={(e) => setCurl(e.target.value)} rows={3}
+        placeholder={"curl 'https://www.instagram.com/...' \\\n  -H 'cookie: sessionid=...' ..."}
+        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-xs text-gray-900 dark:text-zinc-200 placeholder:text-gray-400 font-mono resize-none focus:outline-none focus:ring-2 focus:ring-pink-500/40 focus:border-pink-500 transition-all" />
+      <button onClick={parse} disabled={loading || !curl.trim()}
+        className="w-full py-2 rounded-xl text-sm font-semibold text-white bg-[#e1306c] hover:bg-[#c9175a] disabled:opacity-40 transition-colors flex items-center justify-center gap-2">
+        {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+        {loading ? 'Connecting…' : 'Connect Instagram →'}
+      </button>
+      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
     </div>
   )
 }

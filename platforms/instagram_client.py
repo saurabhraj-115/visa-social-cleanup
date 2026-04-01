@@ -78,9 +78,72 @@ INSTAGRAM_HELP = (
 )
 
 
+def fetch_posts_web(cookies: dict, limit: int = None) -> list[ContentItem]:
+    """Fetch Instagram posts using browser-session cookies (no API keys needed)."""
+    user_id = cookies.get("ds_user_id")
+    if not user_id:
+        raise RuntimeError("ds_user_id not found in session — paste a fresh cURL.")
+
+    session = _ig_session(cookies)
+    items: list[ContentItem] = []
+    max_id = None
+
+    while True:
+        params: dict = {"count": 12}
+        if max_id:
+            params["max_id"] = max_id
+
+        resp = session.get(
+            f"https://www.instagram.com/api/v1/feed/user/{user_id}/",
+            params=params,
+            timeout=30,
+        )
+        if resp.status_code in (401, 403):
+            raise PermissionError("Instagram session expired — paste a fresh cURL to continue.")
+        if resp.status_code == 429:
+            time.sleep(30)
+            continue
+        resp.raise_for_status()
+        data = resp.json()
+
+        for post in data.get("items", []):
+            caption_obj = post.get("caption") or {}
+            caption = caption_obj.get("text") or "" if isinstance(caption_obj, dict) else ""
+            code = post.get("code") or ""
+            taken_at = post.get("taken_at")
+            items.append(ContentItem(
+                platform="instagram",
+                content_type="post",
+                text=caption,
+                url=f"https://www.instagram.com/p/{code}/" if code else "",
+                created_at=str(taken_at) if taken_at else "",
+                item_id=str(post.get("pk") or post.get("id") or ""),
+            ))
+
+        if limit and len(items) >= limit:
+            items = items[:limit]
+            break
+
+        if not data.get("more_available") or not data.get("next_max_id"):
+            break
+        max_id = data["next_max_id"]
+        time.sleep(0.3)
+
+    return items
+
+
 def fetch_items(limit: int = None) -> list[ContentItem]:
+    # Prefer browser-session cookies (more reliable than instagrapi)
+    stored = token_store.get_token("instagram_following")
+    if stored and stored.get("cookies"):
+        return fetch_posts_web(stored["cookies"], limit)
+
+    # Fall back to instagrapi with username/password
     if not config.INSTAGRAM_USERNAME or not config.INSTAGRAM_PASSWORD:
-        raise RuntimeError("Instagram credentials not configured")
+        raise RuntimeError(
+            "Instagram not connected. Open Settings → Instagram and paste a cURL "
+            "from instagram.com DevTools to connect."
+        )
     cl = Client()
     try:
         cl.login(config.INSTAGRAM_USERNAME, config.INSTAGRAM_PASSWORD)
@@ -95,7 +158,6 @@ def fetch_items(limit: int = None) -> list[ContentItem]:
         raise RuntimeError(INSTAGRAM_HELP) from e
 
     items: list[ContentItem] = []
-
     try:
         user_id = cl.user_id_from_username(config.INSTAGRAM_USERNAME)
         medias = cl.user_medias(user_id, amount=limit or 0)
@@ -103,7 +165,7 @@ def fetch_items(limit: int = None) -> list[ContentItem]:
             caption = media.caption_text or ""
             shortcode = media.code
             items.append(ContentItem(
-                platform="Instagram",
+                platform="instagram",
                 content_type="post",
                 text=caption,
                 url=f"https://www.instagram.com/p/{shortcode}/",
