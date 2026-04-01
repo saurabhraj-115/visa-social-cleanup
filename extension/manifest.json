@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Visa Cleanup — Social Connect",
+  "version": "1.1",
+  "description": "One-click Instagram & Twitter session connect for Visa Social Cleanup app",
+  "permissions": ["cookies", "storage"],
+  "host_permissions": [
+    "https://*.instagram.com/",
+    "https://*.twitter.com/",
+    "https://*.x.com/",
+    "https://visa-cleanup.fly.dev/",
+    "http://localhost:8000/"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Connect Social Accounts"
+  }
+}

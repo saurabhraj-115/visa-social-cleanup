@@ -63,6 +63,19 @@ function ConnectSection({ credentialsConfigured, onConnected }) {
           </div>
         </div>
 
+        {/* Extension shortcut */}
+        <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-[#1d9bf0]/8 border border-[#1d9bf0]/20 text-xs text-[#0e6da8] dark:text-[#60c0f8]">
+          <span className="text-base leading-none flex-shrink-0">⚡</span>
+          <span>
+            <strong>Fastest:</strong> Install the{' '}
+            <a href="https://github.com/anthropics/visa-social-cleanup/tree/master/extension"
+              target="_blank" rel="noopener noreferrer" className="underline">
+              Chrome extension
+            </a>{' '}
+            — one click, no API keys needed. Or use the OAuth flow below.
+          </span>
+        </div>
+
         <p className="text-xs text-gray-500 dark:text-zinc-500 leading-relaxed">
           The following list API requires <strong>Consumer Key / Secret</strong> (OAuth 1.0a), found under
           <strong> Keys and tokens → Consumer Keys</strong> in your{' '}
@@ -382,22 +395,23 @@ function Results({ data, onNewScan }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function TwitterFollowingAudit({ statusData, onBack, compact }) {
-  const connected = statusData?.twitter_following_connected ?? false
+  const oauthConnected = statusData?.twitter_following_connected ?? false
+  const browserConnected = statusData?.twitter_browser_connected ?? false
   const credentialsConfigured = statusData?.credentials_configured?.twitter_following ?? false
 
-  const [phase, setPhase] = useState('idle') // idle | connecting | fetching | done | error
+  const [phase, setPhase] = useState('idle') // idle | connecting | fetching | done | error | session_expired
   const [progress, setProgress] = useState({ phase: null, count: 0 })
   const [results, setResults] = useState(null)
   const [error, setError] = useState(null)
-  const [isConnected, setIsConnected] = useState(connected)
+  const [expiredMessage, setExpiredMessage] = useState(null)
+  const [isConnected, setIsConnected] = useState(oauthConnected || browserConnected)
   const wsRef = useRef(null)
 
   const handleConnected = async () => {
-    // Re-fetch status to see if now connected
     try {
       const res = await fetch('/api/status')
       const data = await res.json()
-      setIsConnected(data.twitter_following_connected ?? false)
+      setIsConnected((data.twitter_following_connected || data.twitter_browser_connected) ?? false)
     } catch {}
   }
 
@@ -421,6 +435,11 @@ export default function TwitterFollowingAudit({ statusData, onBack, compact }) {
         setResults(msg)
         setPhase('done')
         ws.close()
+      } else if (msg.type === 'session_expired') {
+        setExpiredMessage(msg.error || 'Twitter session expired — reconnect via the extension.')
+        setIsConnected(false)
+        setPhase('idle')
+        ws.close()
       } else if (msg.type === 'error') {
         setError(msg.error)
         setPhase('error')
@@ -442,19 +461,41 @@ export default function TwitterFollowingAudit({ statusData, onBack, compact }) {
   const inner = (
     <>
       {!isConnected ? (
-        <ConnectSection credentialsConfigured={credentialsConfigured} onConnected={handleConnected} />
-      ) : phase === 'idle' ? (
-        <div className="card p-6 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Users className="w-5 h-5 text-[#1d9bf0]" />
-            <div>
-              <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Ready to audit</p>
-              <p className="text-xs text-gray-500 dark:text-zinc-500">Fetches your full following list and scans each bio</p>
+        <>
+          {expiredMessage && (
+            <div className="mb-4 flex items-start gap-2 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-sm text-amber-800 dark:text-amber-300">
+              <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-500" />
+              <div>
+                <p className="font-medium">Session expired</p>
+                <p className="text-xs mt-0.5">{expiredMessage}</p>
+                <p className="text-xs mt-1">
+                  Use the <strong>Chrome extension</strong> or the OAuth button below to reconnect.
+                </p>
+              </div>
             </div>
+          )}
+          <ConnectSection credentialsConfigured={credentialsConfigured} onConnected={handleConnected} />
+        </>
+      ) : phase === 'idle' ? (
+        <div className="card p-6 space-y-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <Users className="w-5 h-5 text-[#1d9bf0]" />
+              <div>
+                <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Ready to audit</p>
+                <p className="text-xs text-gray-500 dark:text-zinc-500">
+                  {browserConnected ? 'Browser session' : 'OAuth 1.0a'} · Fetches your full following list and scans each bio
+                </p>
+              </div>
+            </div>
+            <button onClick={startAudit}
+              className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#1d9bf0] hover:bg-[#1a8cd8] transition-colors flex-shrink-0">
+              Start audit →
+            </button>
           </div>
-          <button onClick={startAudit}
-            className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#1d9bf0] hover:bg-[#1a8cd8] transition-colors flex-shrink-0">
-            Start audit →
+          <button onClick={() => setIsConnected(false)}
+            className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-zinc-300 underline">
+            Use a different session
           </button>
         </div>
       ) : phase === 'fetching' || phase === 'connecting' ? (

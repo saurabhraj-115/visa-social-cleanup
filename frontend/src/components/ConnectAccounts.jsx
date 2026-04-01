@@ -335,9 +335,23 @@ function InstagramCard({ connected, onSaved }) {
       </div>
       {expanded && (
         <div className="mt-4 space-y-3">
+          {/* Extension shortcut hint */}
+          <div className="flex items-start gap-2 px-3 py-2 rounded-xl bg-violet-50 dark:bg-violet-500/8 border border-violet-200 dark:border-violet-500/20 text-xs text-violet-700 dark:text-violet-300">
+            <span className="text-base leading-none flex-shrink-0">⚡</span>
+            <span>
+              <strong>Faster:</strong> Install the{' '}
+              <a href="https://github.com/anthropics/visa-social-cleanup/tree/master/extension"
+                target="_blank" rel="noopener noreferrer"
+                className="underline hover:text-violet-900 dark:hover:text-violet-100">
+                Chrome extension
+              </a>{' '}
+              for one-click connect — no DevTools needed.
+            </span>
+          </div>
+
           <button onClick={() => setShowInstructions(s => !s)}
             className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-zinc-300 underline text-left">
-            {showInstructions ? 'Hide instructions ▲' : 'How to get a cURL ▼'}
+            {showInstructions ? 'Hide manual instructions ▲' : 'Manual: copy cURL from DevTools ▼'}
           </button>
           {showInstructions && (
             <ol className="text-xs text-gray-500 dark:text-zinc-500 space-y-1 pl-4 list-decimal leading-relaxed border-l-2 border-gray-200 dark:border-zinc-700">

@@ -143,7 +143,132 @@ def _get_access_token() -> str:
     return token_data["access_token"]
 
 
+def fetch_items_web(cookies: dict, limit: int = None) -> list:
+    """Fetch tweets and likes using browser session cookies — no API keys needed."""
+    user_id = _get_tw_user_id(cookies)
+    session = _tw_session(cookies)
+    items = []
+
+    # Resolve username via v1.1 account/verify_credentials
+    try:
+        resp = session.get(
+            "https://api.twitter.com/1.1/account/verify_credentials.json",
+            params={"skip_status": True, "include_entities": False},
+            timeout=15,
+        )
+        if resp.status_code in (401, 403):
+            raise PermissionError("Twitter session expired — reconnect via the extension.")
+        resp.raise_for_status()
+        username = resp.json().get("screen_name", "unknown")
+    except PermissionError:
+        raise
+    except Exception as e:
+        username = "unknown"
+        print(f"[Twitter web] Could not verify credentials: {e}")
+
+    # Own tweets — v1.1 user_timeline
+    try:
+        fetched = 0
+        max_id = None
+        while True:
+            params = {"user_id": user_id, "count": 200, "tweet_mode": "extended",
+                      "exclude_replies": False, "include_rts": True}
+            if max_id:
+                params["max_id"] = max_id
+            resp = session.get(
+                "https://api.twitter.com/1.1/statuses/user_timeline.json",
+                params=params, timeout=30,
+            )
+            if resp.status_code in (401, 403):
+                raise PermissionError("Twitter session expired — reconnect via the extension.")
+            if resp.status_code == 429:
+                time.sleep(60)
+                continue
+            resp.raise_for_status()
+            batch = resp.json()
+            if not batch:
+                break
+            for t in batch:
+                text = t.get("full_text") or t.get("text") or ""
+                tid = str(t["id"])
+                items.append(ContentItem(
+                    platform="Twitter",
+                    content_type="tweet",
+                    text=text,
+                    url=f"https://x.com/{username}/status/{tid}",
+                    created_at=t.get("created_at", ""),
+                    item_id=tid,
+                ))
+                fetched += 1
+                if limit and fetched >= limit:
+                    break
+            if limit and fetched >= limit:
+                break
+            max_id = str(int(batch[-1]["id"]) - 1)
+            if len(batch) < 200:
+                break
+            time.sleep(0.5)
+    except PermissionError:
+        raise
+    except Exception as e:
+        print(f"[Twitter web] Could not fetch tweets: {e}")
+
+    # Liked tweets — v1.1 favorites/list
+    try:
+        like_fetched = 0
+        max_id = None
+        while True:
+            params = {"user_id": user_id, "count": 200, "tweet_mode": "extended"}
+            if max_id:
+                params["max_id"] = max_id
+            resp = session.get(
+                "https://api.twitter.com/1.1/favorites/list.json",
+                params=params, timeout=30,
+            )
+            if resp.status_code in (401, 403):
+                raise PermissionError("Twitter session expired — reconnect via the extension.")
+            if resp.status_code == 429:
+                time.sleep(60)
+                continue
+            resp.raise_for_status()
+            batch = resp.json()
+            if not batch:
+                break
+            for t in batch:
+                text = t.get("full_text") or t.get("text") or ""
+                tid = str(t["id"])
+                author = t.get("user", {}).get("screen_name", "unknown")
+                items.append(ContentItem(
+                    platform="Twitter",
+                    content_type="like",
+                    text=text,
+                    url=f"https://x.com/{author}/status/{tid}",
+                    created_at=t.get("created_at", ""),
+                    item_id=tid,
+                ))
+                like_fetched += 1
+                if limit and like_fetched >= limit:
+                    break
+            if limit and like_fetched >= limit:
+                break
+            max_id = str(int(batch[-1]["id"]) - 1)
+            if len(batch) < 200:
+                break
+            time.sleep(0.5)
+    except PermissionError:
+        raise
+    except Exception as e:
+        print(f"[Twitter web] Could not fetch likes: {e}")
+
+    return items
+
+
 def fetch_items(limit: int = None) -> list:
+    # Prefer browser cookies — no API keys needed
+    stored = token_store.get_token("twitter_browser")
+    if stored and stored.get("cookies"):
+        return fetch_items_web(stored["cookies"], limit)
+
     access_token = _get_access_token()
     client = tweepy.Client(access_token=access_token)
     items = []
@@ -216,6 +341,111 @@ def delete_item(item_id: str, content_type: str):
         raise ValueError(f"Unknown Twitter content_type: {content_type}")
 
 
+# ── Following audit — browser-cookie approach (no API keys needed) ────────────
+
+# Twitter's own web client bearer token (publicly documented)
+_TW_BEARER = (
+    "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I4xL1Rd8%3D"
+    "BjrFlcJvG1XFlbGP1FW38Yg3pJL3xoGdNGN6Oo0UtBmXQpU"
+)
+
+_TW_HEADERS = {
+    "authorization": f"Bearer {_TW_BEARER}",
+    "x-twitter-active-user": "yes",
+    "x-twitter-client-language": "en",
+    "user-agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+    ),
+    "origin": "https://x.com",
+    "referer": "https://x.com/",
+}
+
+
+def _tw_session(cookies: dict) -> requests.Session:
+    s = requests.Session()
+    s.cookies.update(cookies)
+    s.headers.update(_TW_HEADERS)
+    s.headers["x-csrf-token"] = cookies.get("ct0", "")
+    return s
+
+
+def _get_tw_user_id(cookies: dict) -> str:
+    """Extract Twitter user ID from twid cookie (format: u=1234567890)."""
+    twid = cookies.get("twid", "")
+    m = re.match(r"u=(\d+)", twid)
+    if m:
+        return m.group(1)
+    raise RuntimeError("Could not determine Twitter user ID from cookies — reconnect via extension.")
+
+
+def fetch_following_web(cookies: dict, progress_cb=None) -> list:
+    """Fetch Twitter following list using browser session cookies."""
+    user_id = _get_tw_user_id(cookies)
+    session = _tw_session(cookies)
+    accounts = []
+    cursor = -1
+
+    while True:
+        resp = session.get(
+            "https://api.twitter.com/1.1/friends/list.json",
+            params={"user_id": user_id, "count": 200, "cursor": cursor,
+                    "skip_status": True, "include_user_entities": False},
+            timeout=30,
+        )
+        if resp.status_code in (401, 403):
+            raise PermissionError("Twitter session expired — reconnect via the extension.")
+        if resp.status_code == 429:
+            time.sleep(60)
+            continue
+        resp.raise_for_status()
+        data = resp.json()
+
+        for u in data.get("users", []):
+            accounts.append({
+                "user_id": str(u["id"]),
+                "screen_name": u.get("screen_name", ""),
+                "name": u.get("name", ""),
+                "description": u.get("description") or "",
+                "followers_count": u.get("followers_count", 0),
+                "profile_image": u.get("profile_image_url_https", ""),
+            })
+
+        if progress_cb:
+            progress_cb(len(accounts), "following")
+
+        next_cursor = data.get("next_cursor", 0)
+        if not next_cursor:
+            break
+        cursor = next_cursor
+        time.sleep(0.5)
+
+    return accounts
+
+
+def unfollow_users_web(user_ids: list, cookies: dict) -> list:
+    """Unfollow via browser session cookies."""
+    session = _tw_session(cookies)
+    session.headers["content-type"] = "application/x-www-form-urlencoded"
+    results = []
+    for uid in user_ids:
+        try:
+            resp = session.post(
+                "https://api.twitter.com/1.1/friendships/destroy.json",
+                data=f"user_id={uid}",
+                timeout=15,
+            )
+            if resp.status_code in (401, 403):
+                raise PermissionError("Twitter session expired — reconnect via the extension.")
+            results.append({"user_id": uid, "ok": resp.status_code == 200})
+        except PermissionError:
+            raise
+        except Exception as exc:
+            results.append({"user_id": uid, "ok": False, "error": str(exc)})
+        time.sleep(0.5)
+    return results
+
+
 # ── Following audit (OAuth 1.0a / v1.1 API) ──────────────────────────────────
 
 def _get_following_api() -> tweepy.API:
@@ -236,10 +466,15 @@ def _get_following_api() -> tweepy.API:
 
 def fetch_following(progress_cb=None) -> list:
     """
-    Fetch the full list of accounts the user follows via v1.1 API.
+    Fetch the full list of accounts the user follows.
+    Prefers browser-session cookies if stored; falls back to OAuth 1.0a.
     Returns list of dicts: {user_id, screen_name, name, description, followers_count, profile_image}.
     Calls progress_cb(fetched_count, phase) periodically.
     """
+    stored = token_store.get_token("twitter_browser")
+    if stored and stored.get("cookies"):
+        return fetch_following_web(stored["cookies"], progress_cb=progress_cb)
+
     api = _get_following_api()
 
     # Phase 1: collect all following IDs (5000/page, cursor-paginated)
@@ -305,7 +540,11 @@ def scan_following(accounts: list) -> dict:
 
 
 def unfollow_users(user_ids: list, progress_cb=None) -> list:
-    """Unfollow a list of user IDs with 0.5s delay between each. Returns per-user results."""
+    """Unfollow a list of user IDs. Prefers browser cookies; falls back to OAuth 1.0a."""
+    stored = token_store.get_token("twitter_browser")
+    if stored and stored.get("cookies"):
+        return unfollow_users_web(user_ids, stored["cookies"])
+
     api = _get_following_api()
     results = []
     for i, uid in enumerate(user_ids):

@@ -11,14 +11,6 @@ const PLATFORM_META = {
       { key: 'REDDIT_CLIENT_SECRET', label: 'Client Secret', secret: true  },
     ],
   },
-  twitter: {
-    name: 'Twitter / X', color: '#1d9bf0', letter: 'X',
-    docsUrl: 'https://developer.twitter.com', docsLabel: 'developer.twitter.com',
-    credFields: [
-      { key: 'TWITTER_CLIENT_ID',     label: 'Client ID',     secret: false },
-      { key: 'TWITTER_CLIENT_SECRET', label: 'Client Secret', secret: true  },
-    ],
-  },
   linkedin: {
     name: 'LinkedIn', color: '#0a66c2', letter: 'in',
     docsUrl: 'https://www.linkedin.com/developers', docsLabel: 'linkedin.com/developers',
@@ -181,6 +173,124 @@ function OAuthPlatformSection({ platformId, onConfigured }) {
   )
 }
 
+function TwitterBrowserSection({ onConfigured }) {
+  const [checking, setChecking] = useState(true)
+  const [done, setDone] = useState(false)
+  const [connecting, setConnecting] = useState(false)
+  const [error, setError] = useState(null)
+  const [showInstructions, setShowInstructions] = useState(false)
+  const [curl, setCurl] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  // On mount: check if Twitter browser session already stored
+  useEffect(() => {
+    fetch('/api/twitter/session-status')
+      .then(r => r.json())
+      .then(data => {
+        if (data.stored) { setDone(true); onConfigured('twitter') }
+      })
+      .catch(() => {})
+      .finally(() => setChecking(false))
+  }, [onConfigured])
+
+  // OAuth popup fallback
+  const openOAuth = () => {
+    setConnecting(true); setError(null)
+    const popup = window.open('/oauth/twitter/start', 'oauth_twitter', 'width=600,height=700,scrollbars=yes')
+    const onMsg = (e) => {
+      if (e.origin !== window.location.origin) return
+      if (e.data?.platform !== 'twitter') return
+      window.removeEventListener('message', onMsg); clearInterval(poll)
+      setConnecting(false)
+      if (e.data.type === 'oauth_success') { setDone(true); onConfigured('twitter') }
+      else setError(e.data.message || 'Authorization failed.')
+    }
+    window.addEventListener('message', onMsg)
+    const poll = setInterval(() => {
+      if (popup?.closed) {
+        clearInterval(poll); window.removeEventListener('message', onMsg); setConnecting(false)
+        fetch('/api/status').then(r => r.json()).then(d => {
+          if (d.platforms?.twitter) { setDone(true); onConfigured('twitter') }
+        }).catch(() => {})
+      }
+    }, 500)
+  }
+
+  if (checking) {
+    return (
+      <div className="flex items-center gap-2 py-3 px-4 rounded-2xl bg-gray-50 dark:bg-zinc-900/50 border border-gray-200 dark:border-zinc-700">
+        <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+        <span className="text-sm text-gray-500 dark:text-zinc-500">Checking Twitter session…</span>
+      </div>
+    )
+  }
+
+  if (done) {
+    return (
+      <div className="flex items-center gap-2 py-2 px-3 rounded-xl bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20">
+        <div className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold bg-[#1d9bf020] text-[#1d9bf0] flex-shrink-0">X</div>
+        <span className="text-sm text-green-700 dark:text-green-400 font-medium">Twitter connected</span>
+        <Check className="w-4 h-4 text-green-600 dark:text-green-400 ml-auto" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-2xl border border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-900/50 p-4 space-y-3">
+      <div className="flex items-center gap-3">
+        <div className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold bg-[#1d9bf020] text-[#1d9bf0] flex-shrink-0">X</div>
+        <span className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Twitter / X</span>
+        <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-[#1d9bf0]/10 text-[#1d9bf0] font-medium">Browser session</span>
+      </div>
+
+      {/* Extension — primary path */}
+      <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-[#1d9bf0]/8 border border-[#1d9bf0]/20 text-xs text-[#0e6da8] dark:text-[#60c0f8]">
+        <span className="text-base leading-none flex-shrink-0">⚡</span>
+        <span>
+          Fastest: install the{' '}
+          <a href="https://github.com/anthropics/visa-social-cleanup/tree/master/extension"
+            target="_blank" rel="noopener noreferrer" className="underline font-medium">Chrome extension</a>
+          {' '}→ click Connect Twitter → come back here.
+        </span>
+      </div>
+
+      {/* OAuth fallback */}
+      <div className="space-y-2">
+        <button onClick={() => setShowInstructions(s => !s)}
+          className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-zinc-300 underline text-left">
+          {showInstructions ? 'Hide OAuth fallback ▲' : 'No extension? Use OAuth instead ▼'}
+        </button>
+        {showInstructions && (
+          <button onClick={openOAuth} disabled={connecting}
+            className="w-full py-2 rounded-xl text-sm font-semibold text-white bg-[#1d9bf0] hover:bg-[#1a8cd8] disabled:opacity-60 transition-colors flex items-center justify-center gap-2">
+            {connecting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {connecting ? 'Opening Twitter…' : 'Connect via OAuth →'}
+          </button>
+        )}
+      </div>
+
+      {/* Manual re-check after extension use */}
+      <button
+        onClick={() => {
+          fetch('/api/twitter/session-status').then(r => r.json()).then(d => {
+            if (d.stored) { setDone(true); onConfigured('twitter') }
+            else setError('No session found yet — connect via the extension first.')
+          })
+        }}
+        className="w-full py-1.5 rounded-xl text-xs font-medium border border-gray-200 dark:border-zinc-700 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors">
+        I connected via the extension — check again ↺
+      </button>
+
+      {error && (
+        <div className="flex items-start gap-2 px-3 py-2 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-xs text-red-700 dark:text-red-300">
+          <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function InstagramSection({ onConfigured }) {
   const [curl, setCurl] = useState('')
   const [loading, setLoading] = useState(false)
@@ -291,6 +401,8 @@ export default function QuickSetupModal({ platforms, onDone, onClose }) {
           {platforms.map((platformId) =>
             platformId === 'instagram' ? (
               <InstagramSection key={platformId} onConfigured={handleConfigured} />
+            ) : platformId === 'twitter' ? (
+              <TwitterBrowserSection key={platformId} onConfigured={handleConfigured} />
             ) : (
               <OAuthPlatformSection key={platformId} platformId={platformId} onConfigured={handleConfigured} />
             )

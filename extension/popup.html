@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      width: 300px;
+      padding: 16px;
+      background: #fff;
+      color: #111;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .logo {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      background: #7c3aed;
+      display: flex; align-items: center; justify-content: center;
+      color: white; font-size: 14px; font-weight: 700; flex-shrink: 0;
+    }
+    h1 { font-size: 13px; font-weight: 700; color: #111; }
+    p.sub { font-size: 11px; color: #666; margin-top: 2px; }
+
+    .app-url-row { margin-bottom: 14px; }
+    label { font-size: 11px; font-weight: 600; color: #555; display: block; margin-bottom: 4px; }
+    input[type="text"] {
+      width: 100%; padding: 7px 10px;
+      border: 1px solid #ddd; border-radius: 8px;
+      font-size: 12px; color: #111;
+      outline: none;
+    }
+    input[type="text"]:focus { border-color: #7c3aed; box-shadow: 0 0 0 2px rgba(124,58,237,.15); }
+
+    .platform-section {
+      border: 1px solid #eee;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    .platform-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .platform-icon {
+      width: 24px; height: 24px;
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 700; flex-shrink: 0;
+    }
+    .platform-icon.ig { background: #fce7f3; color: #e1306c; }
+    .platform-icon.tw { background: #dbeafe; color: #1d9bf0; }
+    .platform-name { font-size: 12px; font-weight: 600; color: #111; }
+
+    button.connect-btn {
+      width: 100%; padding: 8px;
+      border: none; border-radius: 8px;
+      font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: opacity .15s;
+      color: white;
+    }
+    button.connect-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.connect-btn.ig { background: #e1306c; }
+    button.connect-btn.ig:hover:not(:disabled) { background: #c9175a; }
+    button.connect-btn.tw { background: #1d9bf0; }
+    button.connect-btn.tw:hover:not(:disabled) { background: #1a8cd8; }
+
+    .status {
+      margin-top: 7px;
+      padding: 6px 8px;
+      border-radius: 7px;
+      font-size: 11px;
+      display: none;
+    }
+    .status.success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; display: block; }
+    .status.error   { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; display: block; }
+    .status.info    { background: #f5f3ff; color: #5b21b6; border: 1px solid #ddd6fe; display: block; }
+
+    .note {
+      margin-top: 6px;
+      font-size: 10px;
+      color: #999;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">V</div>
+    <div>
+      <h1>Visa Cleanup</h1>
+      <p class="sub">Connect social accounts instantly</p>
+    </div>
+  </div>
+
+  <div class="app-url-row">
+    <label for="appUrl">App URL</label>
+    <input type="text" id="appUrl" placeholder="http://localhost:8000" />
+  </div>
+
+  <!-- Instagram -->
+  <div class="platform-section">
+    <div class="platform-header">
+      <div class="platform-icon ig">IG</div>
+      <span class="platform-name">Instagram</span>
+    </div>
+    <button id="igBtn" class="connect-btn ig">Connect Instagram →</button>
+    <div class="status" id="igStatus"></div>
+  </div>
+
+  <!-- Twitter / X -->
+  <div class="platform-section">
+    <div class="platform-header">
+      <div class="platform-icon tw">X</div>
+      <span class="platform-name">Twitter / X</span>
+    </div>
+    <button id="twBtn" class="connect-btn tw">Connect Twitter →</button>
+    <div class="status" id="twStatus"></div>
+  </div>
+
+  <p class="note">
+    Log in to each platform in Chrome first. Cookies are sent only to the app URL above.
+  </p>
+
+  <script src="popup.js"></script>
+</body>
+</html>

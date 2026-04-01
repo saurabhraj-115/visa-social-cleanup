@@ -68,7 +68,7 @@ def get_status():
         # True = OAuth token exists (or username/password for Instagram)
         "platforms": {
             "reddit":    connected.get("reddit", False),
-            "twitter":   connected.get("twitter", False),
+            "twitter":   connected.get("twitter", False) or bool(token_store.get_token("twitter_browser")),
             "facebook":  connected.get("facebook", False),
             "instagram": connected.get("instagram_following", False) or _cfg("INSTAGRAM_USERNAME", "INSTAGRAM_PASSWORD"),
             "linkedin":  connected.get("linkedin", False),
@@ -83,6 +83,7 @@ def get_status():
         },
         "has_anthropic_key": bool(config.ANTHROPIC_API_KEY),
         "twitter_following_connected": connected.get("twitter_following", False),
+        "twitter_browser_connected": bool(token_store.get_token("twitter_browser")),
     }
 
 
@@ -319,6 +320,8 @@ async def twitter_following_ws(websocket: WebSocket):
                     "clean_count": len(results["clean"]),
                     "total": len(accounts),
                 })
+            except PermissionError as exc:
+                loop.call_soon_threadsafe(queue.put_nowait, {"type": "session_expired", "error": str(exc)})
             except Exception as exc:
                 loop.call_soon_threadsafe(queue.put_nowait, {"type": "error", "error": str(exc)})
             finally:
@@ -341,10 +344,45 @@ async def twitter_following_ws(websocket: WebSocket):
             pass
 
 
+@app.get("/api/twitter/session-status")
+def twitter_session_status():
+    stored = token_store.get_token("twitter_browser")
+    return {"stored": bool(stored and stored.get("cookies"))}
+
+
+@app.post("/api/twitter/cookies")
+def twitter_set_cookies(body: dict):
+    """Accept a raw cookie dict from the Chrome extension and store it."""
+    cookies = body.get("cookies", {})
+    if not cookies.get("auth_token"):
+        raise HTTPException(status_code=400, detail="auth_token not found in cookies — make sure you're logged in to X/Twitter")
+    if not cookies.get("ct0"):
+        raise HTTPException(status_code=400, detail="ct0 (CSRF token) not found in cookies")
+    token_store.set_token("twitter_browser", {"cookies": cookies})
+    # Extract user_id from twid cookie (format: u=1234567890)
+    twid = cookies.get("twid", "")
+    import re as _re
+    m = _re.match(r"u=(\d+)", twid)
+    user_id = m.group(1) if m else None
+    return {"ok": True, "user_id": user_id}
+
+
 @app.get("/api/instagram/session-status")
 def instagram_session_status():
     stored = token_store.get_token("instagram_following")
     return {"stored": bool(stored and stored.get("cookies"))}
+
+
+@app.post("/api/instagram/cookies")
+def instagram_set_cookies(body: dict):
+    """Accept a raw cookie dict from the Chrome extension and store it."""
+    cookies = body.get("cookies", {})
+    if not cookies.get("sessionid"):
+        raise HTTPException(status_code=400, detail="sessionid not found in cookies")
+    if not cookies.get("ds_user_id"):
+        raise HTTPException(status_code=400, detail="ds_user_id not found in cookies")
+    token_store.set_token("instagram_following", {"cookies": cookies})
+    return {"ok": True, "user_id": cookies.get("ds_user_id")}
 
 
 @app.post("/api/instagram/parse-curl")
