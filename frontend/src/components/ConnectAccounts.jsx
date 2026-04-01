@@ -340,7 +340,7 @@ function InstagramCard({ connected, onSaved }) {
             <span className="text-base leading-none flex-shrink-0">⚡</span>
             <span>
               <strong>Faster:</strong> Install the{' '}
-              <a href="https://github.com/anthropics/visa-social-cleanup/tree/master/extension"
+              <a href="https://github.com/saurabhraj-115/visa-social-cleanup/tree/master/extension"
                 target="_blank" rel="noopener noreferrer"
                 className="underline hover:text-violet-900 dark:hover:text-violet-100">
                 Chrome extension

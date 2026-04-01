@@ -248,7 +248,7 @@ function TwitterBrowserSection({ onConfigured }) {
         <span className="text-base leading-none flex-shrink-0">⚡</span>
         <span>
           Fastest: install the{' '}
-          <a href="https://github.com/anthropics/visa-social-cleanup/tree/master/extension"
+          <a href="https://github.com/saurabhraj-115/visa-social-cleanup/tree/master/extension"
             target="_blank" rel="noopener noreferrer" className="underline font-medium">Chrome extension</a>
           {' '}→ click Connect Twitter → come back here.
         </span>
