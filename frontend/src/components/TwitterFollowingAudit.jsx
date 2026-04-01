@@ -381,7 +381,7 @@ function Results({ data, onNewScan }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function TwitterFollowingAudit({ statusData, onBack }) {
+export default function TwitterFollowingAudit({ statusData, onBack, compact }) {
   const connected = statusData?.twitter_following_connected ?? false
   const credentialsConfigured = statusData?.credentials_configured?.twitter_following ?? false
 
@@ -439,23 +439,8 @@ export default function TwitterFollowingAudit({ statusData, onBack }) {
     setProgress({ phase: null, count: 0 })
   }
 
-  return (
-    <main className="max-w-2xl mx-auto px-4 py-10 animate-fade-in-up">
-      <button onClick={onBack}
-        className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-zinc-100 transition-colors mb-6">
-        <ArrowLeft className="w-4 h-4" /> Back
-      </button>
-
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-9 h-9 rounded-xl bg-[#1d9bf020] flex items-center justify-center text-sm font-bold text-[#1d9bf0]">X</div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-zinc-100">Twitter Following Audit</h1>
-        </div>
-        <p className="text-gray-500 dark:text-zinc-400 text-sm leading-relaxed">
-          Scans every account you follow for red-flag content and journalist bios. Lets you bulk unfollow before your visa interview — no tweets deleted, just follows.
-        </p>
-      </div>
-
+  const inner = (
+    <>
       {!isConnected ? (
         <ConnectSection credentialsConfigured={credentialsConfigured} onConnected={handleConnected} />
       ) : phase === 'idle' ? (
@@ -488,6 +473,27 @@ export default function TwitterFollowingAudit({ statusData, onBack }) {
       ) : phase === 'done' && results ? (
         <Results data={results} onNewScan={reset} />
       ) : null}
+    </>
+  )
+
+  if (compact) return inner
+
+  return (
+    <main className="max-w-2xl mx-auto px-4 py-10 animate-fade-in-up">
+      <button onClick={onBack}
+        className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-zinc-100 transition-colors mb-6">
+        <ArrowLeft className="w-4 h-4" /> Back
+      </button>
+      <div className="mb-8">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-9 h-9 rounded-xl bg-[#1d9bf020] flex items-center justify-center text-sm font-bold text-[#1d9bf0]">X</div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-zinc-100">Twitter Following Audit</h1>
+        </div>
+        <p className="text-gray-500 dark:text-zinc-400 text-sm leading-relaxed">
+          Scans every account you follow for red-flag content and journalist bios. Lets you bulk unfollow before your visa interview.
+        </p>
+      </div>
+      {inner}
     </main>
   )
 }

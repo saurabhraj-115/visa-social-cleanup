@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import Dashboard from './components/Dashboard'
-import ScanProgress from './components/ScanProgress'
-import Results from './components/Results'
+import ScanTabsView from './components/ScanTabsView'
 import ConnectAccounts from './components/ConnectAccounts'
 import Navbar from './components/Navbar'
 import Dossier from './components/Dossier'
@@ -23,30 +22,21 @@ export default function App() {
   const [serverError, setServerError] = useState(null)
 
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
-
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
     localStorage.setItem('theme', theme)
   }, [theme])
 
-  const [scanConfig, setScanConfig] = useState({
-    platforms: [],
-    severity: 'medium',
-    limit: null,
-  })
+  const [scanConfig, setScanConfig] = useState({ platforms: [], severity: 'medium', limit: null })
 
-  const [progress, setProgress] = useState({
-    phase: 'idle',
-    fetchStatus: {},
-    analyzed: 0,
-    total: 0,
-    flaggedCount: 0,
-    lastPlatform: null,
-  })
+  // Per-platform scan state (fed by WS messages)
+  const [platformScan, setPlatformScan] = useState({})
+  // 'idle' | 'connecting' | 'scanning' | 'done'
+  const [scanPhase, setScanPhase] = useState('idle')
 
   const [results, setResults] = useState({ flagged: [], totalAnalyzed: 0 })
   const [dossier, setDossier] = useState(null)
-  const [quickSetupPlatforms, setQuickSetupPlatforms] = useState(null) // null = hidden
+  const [quickSetupPlatforms, setQuickSetupPlatforms] = useState(null)
   const wsRef = useRef(null)
   const scanTimeoutRef = useRef(null)
 
@@ -65,21 +55,18 @@ export default function App() {
   }, [])
 
   const startScan = () => {
-    // Check which selected platforms are not yet configured
     const unconfigured = scanConfig.platforms.filter((p) => !platformStatus?.[p])
-    if (unconfigured.length > 0) {
-      setQuickSetupPlatforms(unconfigured)
-      return
-    }
+    if (unconfigured.length > 0) { setQuickSetupPlatforms(unconfigured); return }
     doStartScan()
   }
 
   const doStartScan = () => {
     setQuickSetupPlatforms(null)
     setServerError(null)
-    setProgress({ phase: 'connecting', fetchStatus: {}, analyzed: 0, total: 0, flaggedCount: 0, lastPlatform: null })
+    setPlatformScan({})
+    setScanPhase('connecting')
     setResults({ flagged: [], totalAnalyzed: 0 })
-    setView('scanning')
+    setView('scan-tabs')
 
     const ws = new WebSocket(wsUrl())
     wsRef.current = ws
@@ -96,29 +83,44 @@ export default function App() {
       const msg = JSON.parse(data)
       switch (msg.type) {
         case 'fetch_start':
-          setProgress((p) => ({ ...p, phase: 'fetching', fetchStatus: { ...p.fetchStatus, [msg.platform]: 'loading' } }))
-          break
-        case 'fetch_done':
-          setProgress((p) => ({ ...p, fetchStatus: { ...p.fetchStatus, [msg.platform]: msg.count } }))
-          break
-        case 'fetch_error':
-          setProgress((p) => ({ ...p, fetchStatus: { ...p.fetchStatus, [msg.platform]: { code: 'error', message: msg.error } } }))
-          break
-        case 'analyze_start':
-          setProgress((p) => ({ ...p, phase: 'analyzing', total: msg.total }))
-          break
-        case 'analyze_progress':
-          setProgress((p) => ({
-            ...p,
-            analyzed: msg.current,
-            lastPlatform: msg.platform,
-            flaggedCount: p.flaggedCount + (msg.flagged ? 1 : 0),
+          setScanPhase('scanning')
+          setPlatformScan(ps => ({
+            ...ps,
+            [msg.platform]: { fetchPhase: 'loading', fetchCount: 0, fetchError: null, analyzed: 0, flaggedCount: 0 },
           }))
           break
+        case 'fetch_done':
+          setPlatformScan(ps => ({
+            ...ps,
+            [msg.platform]: { ...(ps[msg.platform] || {}), fetchPhase: 'done', fetchCount: msg.count },
+          }))
+          break
+        case 'fetch_error':
+          setPlatformScan(ps => ({
+            ...ps,
+            [msg.platform]: { ...(ps[msg.platform] || {}), fetchPhase: 'error', fetchError: msg.error },
+          }))
+          break
+        case 'analyze_start':
+          break
+        case 'analyze_progress': {
+          // item.platform from Python is capitalized (e.g. "Reddit") — normalize to lowercase
+          const key = msg.platform?.toLowerCase()
+          if (key) {
+            setPlatformScan(ps => {
+              const cur = ps[key] || {}
+              return {
+                ...ps,
+                [key]: { ...cur, analyzed: (cur.analyzed || 0) + 1, flaggedCount: (cur.flaggedCount || 0) + (msg.flagged ? 1 : 0) },
+              }
+            })
+          }
+          break
+        }
         case 'done':
           clearTimeout(scanTimeoutRef.current)
           setResults({ flagged: msg.flagged ?? [], totalAnalyzed: msg.total_analyzed ?? 0 })
-          setView('results')
+          setScanPhase('done')
           break
         case 'error':
           clearTimeout(scanTimeoutRef.current)
@@ -126,7 +128,7 @@ export default function App() {
           setView('dashboard')
           break
         default:
-          console.warn('[ws] unknown message type:', msg.type)
+          break
       }
     }
 
@@ -140,6 +142,8 @@ export default function App() {
   const reset = () => {
     clearTimeout(scanTimeoutRef.current)
     wsRef.current?.close()
+    setScanPhase('idle')
+    setPlatformScan({})
     setView('dashboard')
     setServerError(null)
     setDossier(null)
@@ -155,7 +159,6 @@ export default function App() {
   }
 
   const handleQuickSetupDone = () => {
-    // Re-fetch status so platformStatus is up-to-date, then scan
     fetch('/api/status')
       .then((r) => r.json())
       .then((data) => {
@@ -164,10 +167,7 @@ export default function App() {
         setQuickSetupPlatforms(null)
         doStartScan()
       })
-      .catch(() => {
-        setQuickSetupPlatforms(null)
-        doStartScan()
-      })
+      .catch(() => { setQuickSetupPlatforms(null); doStartScan() })
   }
 
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
@@ -196,8 +196,6 @@ export default function App() {
           setScanConfig={setScanConfig}
           onStartScan={startScan}
           onOpenSetup={() => setView('setup')}
-          onOpenFollowingAudit={() => setView('twitter-following')}
-          onOpenIgAudit={() => setView('instagram-following')}
           error={serverError}
         />
       )}
@@ -208,20 +206,21 @@ export default function App() {
           onSaved={handleCredentialsSaved}
         />
       )}
-      {view === 'scanning' && (
-        <ScanProgress progress={progress} platforms={scanConfig.platforms} onCancel={reset} />
-      )}
-      {view === 'results' && (
-        <Results
+      {view === 'scan-tabs' && (
+        <ScanTabsView
+          platforms={scanConfig.platforms}
+          platformScan={platformScan}
+          scanPhase={scanPhase}
           results={results}
+          statusData={statusData}
           onNewScan={reset}
-          onOpenDossier={() => setView('dossier')}
+          onOpenDossier={results.flagged.length > 0 ? () => setView('dossier') : null}
         />
       )}
       {view === 'dossier' && (
         <Dossier
           results={results}
-          onBack={() => setView('results')}
+          onBack={() => setView('scan-tabs')}
           onProceedToInterview={(d) => { setDossier(d); setView('interview') }}
           onProceedToPrep={(d) => { setDossier(d); setView('prep') }}
         />
@@ -240,11 +239,9 @@ export default function App() {
           onBack={() => setView('dossier')}
         />
       )}
+      {/* Standalone audit pages (still accessible from setup/direct links if needed) */}
       {view === 'twitter-following' && (
-        <TwitterFollowingAudit
-          statusData={statusData}
-          onBack={() => setView('dashboard')}
-        />
+        <TwitterFollowingAudit statusData={statusData} onBack={() => setView('dashboard')} />
       )}
       {view === 'instagram-following' && (
         <InstagramFollowingAudit onBack={() => setView('dashboard')} />

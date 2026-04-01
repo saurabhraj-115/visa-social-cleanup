@@ -396,7 +396,7 @@ function Results({ data, onNewScan }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function InstagramFollowingAudit({ onBack }) {
+export default function InstagramFollowingAudit({ onBack, compact }) {
   const [phase, setPhase] = useState('idle') // idle | fetching | scanning | done | error | expired
   const [progress, setProgress] = useState({ phase: null, count: 0 })
   const [bioProgress, setBioProgress] = useState({ current: 0, total: 0 })
@@ -465,34 +465,14 @@ export default function InstagramFollowingAudit({ onBack }) {
     setBioProgress({ current: 0, total: 0 })
   }
 
-  // Still checking session status
   if (sessionReady === null) {
-    return (
-      <main className="max-w-2xl mx-auto px-4 py-10 flex items-center justify-center">
-        <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
-      </main>
-    )
+    const loader = <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+    if (compact) return <div className="flex justify-center py-8">{loader}</div>
+    return <main className="max-w-2xl mx-auto px-4 py-10 flex items-center justify-center">{loader}</main>
   }
 
-  return (
-    <main className="max-w-2xl mx-auto px-4 py-10 animate-fade-in-up">
-      <button onClick={onBack}
-        className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-zinc-100 transition-colors mb-6">
-        <ArrowLeft className="w-4 h-4" /> Back
-      </button>
-
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)' }}>IG</div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-zinc-100">Instagram Following Audit</h1>
-        </div>
-        <p className="text-gray-500 dark:text-zinc-400 text-sm leading-relaxed">
-          Scans every account you follow for political figures, journalists, and red-flag content.
-          Uses your browser session — no API approval needed.
-        </p>
-      </div>
-
+  const inner = (
+    <>
       {!sessionReady ? (
         // Show paste form — with expired banner if session just died mid-scan
         <CurlSection onReady={handleSessionReady} expiredMessage={error} />
@@ -538,6 +518,29 @@ export default function InstagramFollowingAudit({ onBack }) {
       ) : phase === 'done' && results ? (
         <Results data={results} onNewScan={reset} />
       ) : null}
+    </>
+  )
+
+  if (compact) return inner
+
+  return (
+    <main className="max-w-2xl mx-auto px-4 py-10 animate-fade-in-up">
+      <button onClick={onBack}
+        className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-zinc-100 transition-colors mb-6">
+        <ArrowLeft className="w-4 h-4" /> Back
+      </button>
+      <div className="mb-8">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+            style={{ background: 'linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)' }}>IG</div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-zinc-100">Instagram Following Audit</h1>
+        </div>
+        <p className="text-gray-500 dark:text-zinc-400 text-sm leading-relaxed">
+          Scans every account you follow for political figures, journalists, and red-flag content.
+          Uses your browser session — no API approval needed.
+        </p>
+      </div>
+      {inner}
     </main>
   )
 }
