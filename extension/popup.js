@@ -3,13 +3,7 @@ const STORAGE_KEY = 'visaCleanupAppUrl'
 
 const appUrlInput = document.getElementById('appUrl')
 
-// Restore saved app URL
-chrome.storage.local.get([STORAGE_KEY], (res) => {
-  appUrlInput.value = res[STORAGE_KEY] || DEFAULT_APP_URL
-})
-appUrlInput.addEventListener('change', () => {
-  chrome.storage.local.set({ [STORAGE_KEY]: appUrlInput.value.trim() })
-})
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getAppUrl() {
   return (appUrlInput.value.trim() || DEFAULT_APP_URL).replace(/\/$/, '')
@@ -24,7 +18,7 @@ async function getAllCookies(domain) {
   return new Promise((resolve, reject) => {
     chrome.cookies.getAll({ domain }, (cookies) => {
       if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message))
-      else resolve(cookies)
+      else resolve(cookies || [])
     })
   })
 }
@@ -35,7 +29,31 @@ function cookieArrayToDict(cookies) {
   return dict
 }
 
-// ── Instagram ────────────────────────────────────────────────────────────────
+// ── On load: restore app URL + check existing connections ─────────────────────
+
+chrome.storage.local.get([STORAGE_KEY], (res) => {
+  appUrlInput.value = res[STORAGE_KEY] || DEFAULT_APP_URL
+  checkStatuses()
+})
+
+appUrlInput.addEventListener('change', () => {
+  chrome.storage.local.set({ [STORAGE_KEY]: appUrlInput.value.trim() })
+  checkStatuses()
+})
+
+async function checkStatuses() {
+  const appUrl = getAppUrl()
+  try {
+    const [igRes, twRes] = await Promise.all([
+      fetch(`${appUrl}/api/instagram/session-status`).then(r => r.json()).catch(() => null),
+      fetch(`${appUrl}/api/twitter/session-status`).then(r => r.json()).catch(() => null),
+    ])
+    if (igRes?.stored) showStatus(document.getElementById('igStatus'), 'success', '✓ Connected to app')
+    if (twRes?.stored) showStatus(document.getElementById('twStatus'), 'success', '✓ Connected to app')
+  } catch {}
+}
+
+// ── Instagram ─────────────────────────────────────────────────────────────────
 
 document.getElementById('igBtn').addEventListener('click', async () => {
   const btn = document.getElementById('igBtn')
@@ -48,7 +66,6 @@ document.getElementById('igBtn').addEventListener('click', async () => {
 
     if (!cookies.sessionid) {
       showStatus(statusEl, 'error', 'Not logged in to Instagram. Open instagram.com and log in first.')
-      btn.disabled = false
       return
     }
 
@@ -60,7 +77,7 @@ document.getElementById('igBtn').addEventListener('click', async () => {
     })
     const data = await resp.json()
     if (!resp.ok) throw new Error(data.detail || `Server error ${resp.status}`)
-    showStatus(statusEl, 'success', `Connected! (user_id: ${data.user_id || '?'})`)
+    showStatus(statusEl, 'success', `✓ Connected${data.user_id ? ` (id: ${data.user_id})` : ''}`)
   } catch (err) {
     showStatus(statusEl, 'error', err.message || 'Failed to connect')
   } finally {
@@ -68,7 +85,7 @@ document.getElementById('igBtn').addEventListener('click', async () => {
   }
 })
 
-// ── Twitter / X ──────────────────────────────────────────────────────────────
+// ── Twitter / X ───────────────────────────────────────────────────────────────
 
 document.getElementById('twBtn').addEventListener('click', async () => {
   const btn = document.getElementById('twBtn')
@@ -77,18 +94,22 @@ document.getElementById('twBtn').addEventListener('click', async () => {
   showStatus(statusEl, 'info', 'Reading Twitter cookies…')
 
   try {
-    // Collect from both twitter.com and x.com (they share cookies via twitter.com domain)
+    // Collect from both twitter.com and x.com
     const [twCookies, xCookies] = await Promise.all([
       getAllCookies('.twitter.com'),
       getAllCookies('.x.com'),
     ])
-    // Merge; x.com values take precedence if they differ
-    const cookies = { ...cookieArrayToDict(twCookies), ...cookieArrayToDict(xCookies) }
+    // twitter.com takes precedence for auth_token (it's always set there)
+    const cookies = { ...cookieArrayToDict(xCookies), ...cookieArrayToDict(twCookies) }
 
     if (!cookies.auth_token) {
       showStatus(statusEl, 'error', 'Not logged in to Twitter/X. Open x.com and log in first.')
-      btn.disabled = false
       return
+    }
+
+    // twid is URL-encoded on some browsers: "u%3D1234" → "u=1234"
+    if (cookies.twid) {
+      cookies.twid = decodeURIComponent(cookies.twid)
     }
 
     showStatus(statusEl, 'info', 'Sending to app…')
@@ -99,7 +120,7 @@ document.getElementById('twBtn').addEventListener('click', async () => {
     })
     const data = await resp.json()
     if (!resp.ok) throw new Error(data.detail || `Server error ${resp.status}`)
-    showStatus(statusEl, 'success', `Connected! (user_id: ${data.user_id || '?'})`)
+    showStatus(statusEl, 'success', `✓ Connected${data.user_id ? ` (id: ${data.user_id})` : ''}`)
   } catch (err) {
     showStatus(statusEl, 'error', err.message || 'Failed to connect')
   } finally {

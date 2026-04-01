@@ -371,8 +371,9 @@ def _tw_session(cookies: dict) -> requests.Session:
 
 
 def _get_tw_user_id(cookies: dict) -> str:
-    """Extract Twitter user ID from twid cookie (format: u=1234567890)."""
-    twid = cookies.get("twid", "")
+    """Extract Twitter user ID from twid cookie (may be URL-encoded: u%3D123 or plain u=123)."""
+    from urllib.parse import unquote
+    twid = unquote(cookies.get("twid", ""))
     m = re.match(r"u=(\d+)", twid)
     if m:
         return m.group(1)

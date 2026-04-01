@@ -359,9 +359,10 @@ def twitter_set_cookies(body: dict):
     if not cookies.get("ct0"):
         raise HTTPException(status_code=400, detail="ct0 (CSRF token) not found in cookies")
     token_store.set_token("twitter_browser", {"cookies": cookies})
-    # Extract user_id from twid cookie (format: u=1234567890)
-    twid = cookies.get("twid", "")
+    # Extract user_id from twid cookie — value may be URL-encoded: "u%3D123" or plain "u=123"
+    from urllib.parse import unquote
     import re as _re
+    twid = unquote(cookies.get("twid", ""))
     m = _re.match(r"u=(\d+)", twid)
     user_id = m.group(1) if m else None
     return {"ok": True, "user_id": user_id}
