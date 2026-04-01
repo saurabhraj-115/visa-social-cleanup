@@ -158,7 +158,7 @@ export default function ScanTabsView({
       )}
 
       {/* ── Posts & Likes tab ── */}
-      {tab === 'posts' && (
+      <div className={tab === 'posts' ? '' : 'hidden'}>
         <div className="space-y-3">
           {platforms.map(platform => (
             <PlatformCard
@@ -205,10 +205,10 @@ export default function ScanTabsView({
             </div>
           )}
         </div>
-      )}
+      </div>
 
       {/* ── Following Audit tab ── */}
-      {tab === 'following' && (
+      <div className={tab === 'following' ? '' : 'hidden'}>
         <div className="space-y-8">
           {platforms.includes('twitter') && (
             <section>
@@ -230,7 +230,7 @@ export default function ScanTabsView({
             </section>
           )}
         </div>
-      )}
+      </div>
     </main>
   )
 }
