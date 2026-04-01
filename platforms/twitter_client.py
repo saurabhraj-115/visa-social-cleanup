@@ -143,122 +143,107 @@ def _get_access_token() -> str:
     return token_data["access_token"]
 
 
+def _tw_api_get(session, url, params, label):
+    """GET a Twitter v1.1 endpoint; raise on auth errors or API error dicts."""
+    while True:
+        resp = session.get(url, params=params, timeout=30)
+        if resp.status_code in (401, 403):
+            raise PermissionError("Twitter session expired — reconnect via the extension.")
+        if resp.status_code == 429:
+            time.sleep(60)
+            continue
+        resp.raise_for_status()
+        data = resp.json()
+        # Twitter sometimes returns 200 + {"errors":[...]} instead of a proper HTTP error
+        if isinstance(data, dict) and "errors" in data:
+            codes = [str(e.get("code", "")) for e in data["errors"]]
+            msgs  = [e.get("message", "") for e in data["errors"]]
+            raise RuntimeError(f"Twitter {label} error (code {','.join(codes)}): {'; '.join(msgs)}")
+        return data
+
+
 def fetch_items_web(cookies: dict, limit: int = None) -> list:
     """Fetch tweets and likes using browser session cookies — no API keys needed."""
     user_id = _get_tw_user_id(cookies)
     session = _tw_session(cookies)
     items = []
 
-    # Resolve username via v1.1 account/verify_credentials
+    # Resolve username
     try:
-        resp = session.get(
+        creds = _tw_api_get(session,
             "https://api.twitter.com/1.1/account/verify_credentials.json",
-            params={"skip_status": True, "include_entities": False},
-            timeout=15,
+            {"skip_status": True, "include_entities": False},
+            "verify_credentials",
         )
-        if resp.status_code in (401, 403):
-            raise PermissionError("Twitter session expired — reconnect via the extension.")
-        resp.raise_for_status()
-        username = resp.json().get("screen_name", "unknown")
+        username = creds.get("screen_name", "unknown")
     except PermissionError:
         raise
     except Exception as e:
-        username = "unknown"
-        print(f"[Twitter web] Could not verify credentials: {e}")
+        raise RuntimeError(f"Twitter: could not verify credentials — {e}") from e
 
-    # Own tweets — v1.1 user_timeline
-    try:
-        fetched = 0
-        max_id = None
-        while True:
-            params = {"user_id": user_id, "count": 200, "tweet_mode": "extended",
-                      "exclude_replies": False, "include_rts": True}
-            if max_id:
-                params["max_id"] = max_id
-            resp = session.get(
-                "https://api.twitter.com/1.1/statuses/user_timeline.json",
-                params=params, timeout=30,
-            )
-            if resp.status_code in (401, 403):
-                raise PermissionError("Twitter session expired — reconnect via the extension.")
-            if resp.status_code == 429:
-                time.sleep(60)
-                continue
-            resp.raise_for_status()
-            batch = resp.json()
-            if not batch:
-                break
-            for t in batch:
-                text = t.get("full_text") or t.get("text") or ""
-                tid = str(t["id"])
-                items.append(ContentItem(
-                    platform="Twitter",
-                    content_type="tweet",
-                    text=text,
-                    url=f"https://x.com/{username}/status/{tid}",
-                    created_at=t.get("created_at", ""),
-                    item_id=tid,
-                ))
-                fetched += 1
-                if limit and fetched >= limit:
-                    break
+    # Own tweets
+    fetched = 0
+    max_id = None
+    while True:
+        params = {"user_id": user_id, "count": 200, "tweet_mode": "extended",
+                  "exclude_replies": False, "include_rts": True}
+        if max_id:
+            params["max_id"] = max_id
+        batch = _tw_api_get(session,
+            "https://api.twitter.com/1.1/statuses/user_timeline.json",
+            params, "user_timeline",
+        )
+        if not batch:
+            break
+        for t in batch:
+            text = t.get("full_text") or t.get("text") or ""
+            tid = str(t["id"])
+            items.append(ContentItem(
+                platform="Twitter", content_type="tweet", text=text,
+                url=f"https://x.com/{username}/status/{tid}",
+                created_at=t.get("created_at", ""), item_id=tid,
+            ))
+            fetched += 1
             if limit and fetched >= limit:
                 break
-            max_id = str(int(batch[-1]["id"]) - 1)
-            if len(batch) < 200:
-                break
-            time.sleep(0.5)
-    except PermissionError:
-        raise
-    except Exception as e:
-        print(f"[Twitter web] Could not fetch tweets: {e}")
+        if limit and fetched >= limit:
+            break
+        max_id = str(int(batch[-1]["id"]) - 1)
+        if len(batch) < 200:
+            break
+        time.sleep(0.5)
 
-    # Liked tweets — v1.1 favorites/list
-    try:
-        like_fetched = 0
-        max_id = None
-        while True:
-            params = {"user_id": user_id, "count": 200, "tweet_mode": "extended"}
-            if max_id:
-                params["max_id"] = max_id
-            resp = session.get(
-                "https://api.twitter.com/1.1/favorites/list.json",
-                params=params, timeout=30,
-            )
-            if resp.status_code in (401, 403):
-                raise PermissionError("Twitter session expired — reconnect via the extension.")
-            if resp.status_code == 429:
-                time.sleep(60)
-                continue
-            resp.raise_for_status()
-            batch = resp.json()
-            if not batch:
-                break
-            for t in batch:
-                text = t.get("full_text") or t.get("text") or ""
-                tid = str(t["id"])
-                author = t.get("user", {}).get("screen_name", "unknown")
-                items.append(ContentItem(
-                    platform="Twitter",
-                    content_type="like",
-                    text=text,
-                    url=f"https://x.com/{author}/status/{tid}",
-                    created_at=t.get("created_at", ""),
-                    item_id=tid,
-                ))
-                like_fetched += 1
-                if limit and like_fetched >= limit:
-                    break
+    # Liked tweets
+    like_fetched = 0
+    max_id = None
+    while True:
+        params = {"user_id": user_id, "count": 200, "tweet_mode": "extended"}
+        if max_id:
+            params["max_id"] = max_id
+        batch = _tw_api_get(session,
+            "https://api.twitter.com/1.1/favorites/list.json",
+            params, "favorites",
+        )
+        if not batch:
+            break
+        for t in batch:
+            text = t.get("full_text") or t.get("text") or ""
+            tid = str(t["id"])
+            author = t.get("user", {}).get("screen_name", "unknown")
+            items.append(ContentItem(
+                platform="Twitter", content_type="like", text=text,
+                url=f"https://x.com/{author}/status/{tid}",
+                created_at=t.get("created_at", ""), item_id=tid,
+            ))
+            like_fetched += 1
             if limit and like_fetched >= limit:
                 break
-            max_id = str(int(batch[-1]["id"]) - 1)
-            if len(batch) < 200:
-                break
-            time.sleep(0.5)
-    except PermissionError:
-        raise
-    except Exception as e:
-        print(f"[Twitter web] Could not fetch likes: {e}")
+        if limit and like_fetched >= limit:
+            break
+        max_id = str(int(batch[-1]["id"]) - 1)
+        if len(batch) < 200:
+            break
+        time.sleep(0.5)
 
     return items
 

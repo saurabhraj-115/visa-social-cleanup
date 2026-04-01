@@ -463,15 +463,25 @@ export default function TwitterFollowingAudit({ statusData, onBack, compact }) {
       {!isConnected ? (
         <>
           {expiredMessage && (
-            <div className="mb-4 flex items-start gap-2 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-sm text-amber-800 dark:text-amber-300">
-              <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-500" />
-              <div>
-                <p className="font-medium">Session expired</p>
-                <p className="text-xs mt-0.5">{expiredMessage}</p>
-                <p className="text-xs mt-1">
-                  Use the <strong>Chrome extension</strong> or the OAuth button below to reconnect.
-                </p>
+            <div className="mb-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 p-4 space-y-3">
+              <div className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300">
+                <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-500" />
+                <div>
+                  <p className="font-medium">Session expired</p>
+                  <p className="text-xs mt-0.5 text-amber-700 dark:text-amber-400">{expiredMessage}</p>
+                </div>
               </div>
+              <button
+                onClick={() => {
+                  fetch('/api/twitter/session-status').then(r => r.json()).then(d => {
+                    if (d.stored) { setIsConnected(true); setExpiredMessage(null) }
+                    else setExpiredMessage('Still no session found — reconnect via the extension first.')
+                  }).catch(() => {})
+                }}
+                className="w-full py-2 rounded-xl text-sm font-semibold text-white bg-[#1d9bf0] hover:bg-[#1a8cd8] transition-colors"
+              >
+                I reconnected via the extension — check again ↺
+              </button>
             </div>
           )}
           <ConnectSection credentialsConfigured={credentialsConfigured} onConnected={handleConnected} />
