@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Loader2, AlertTriangle, CheckCircle2, FileSearch, ShieldCheck, ChevronDown, ChevronUp } from 'lucide-react'
 import ResultCard from './ResultCard'
+import RiskReportView from './RiskReportView'
 import { PLATFORMS } from '../lib/platforms'
 import TwitterFollowingAudit from './TwitterFollowingAudit'
 import InstagramFollowingAudit from './InstagramFollowingAudit'
@@ -106,6 +107,7 @@ export default function ScanTabsView({
 
   const tabs = [
     { id: 'posts', label: 'Posts & Likes' },
+    { id: 'risk', label: 'Risk Report' },
     ...(hasFollowing ? [{ id: 'following', label: 'Following Audit' }] : []),
   ]
 
@@ -139,23 +141,21 @@ export default function ScanTabsView({
       </div>
 
       {/* Tab bar */}
-      {hasFollowing && (
-        <div className="flex mb-6 border-b border-gray-200 dark:border-zinc-800">
-          {tabs.map(t => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                tab === t.id
-                  ? 'border-violet-600 text-violet-600 dark:text-violet-400'
-                  : 'border-transparent text-gray-500 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="flex mb-6 border-b border-gray-200 dark:border-zinc-800">
+        {tabs.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              tab === t.id
+                ? 'border-violet-600 text-violet-600 dark:text-violet-400'
+                : 'border-transparent text-gray-500 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
       {/* ── Posts & Likes tab ── */}
       <div className={tab === 'posts' ? '' : 'hidden'}>
@@ -205,6 +205,18 @@ export default function ScanTabsView({
             </div>
           )}
         </div>
+      </div>
+
+      {/* ── Risk Report tab ── */}
+      <div className={tab === 'risk' ? '' : 'hidden'}>
+        {!scanDone ? (
+          <div className="flex items-center gap-3 py-8 text-sm text-gray-400 dark:text-zinc-500">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Scan in progress — risk report will appear when complete…
+          </div>
+        ) : (
+          <RiskReportView flagged={results.flagged} totalAnalyzed={results.totalAnalyzed} />
+        )}
       </div>
 
       {/* ── Following Audit tab ── */}

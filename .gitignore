@@ -18,6 +18,9 @@ env/
 # Output / exported scan results
 visa-cleanup-results.json
 
+# Attorney mode client data (contains PII)
+clients/
+
 # Instagram session cache
 cl_*.json
 instagrapi_*.json

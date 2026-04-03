@@ -1,6 +1,6 @@
 # Visa Social Media Cleanup
 
-AI-powered tool that scans your social media accounts for content that could raise concerns at a US visa interview. Claude AI flags posts and likes for review — nothing is deleted automatically. Includes a mock officer interview simulator to help you prepare.
+AI-powered tool that scans your social media accounts for content that could raise concerns at a US visa interview. Claude AI flags posts and likes for review — nothing is deleted automatically. Includes a structured risk report, mock officer interview simulator, and attorney client management.
 
 **Live:** https://visa-cleanup.fly.dev
 
@@ -11,20 +11,35 @@ AI-powered tool that scans your social media accounts for content that could rai
 ### Post & Like Scanner
 Scans your own posts, comments, and likes across 5 platforms. Claude AI flags content a consular officer might find concerning, grouped by severity (High / Medium / Low).
 
+### Risk Report
+A read-only, assessment-only view of your scan results — no actions, no delete buttons. Inspired by how consular officers actually categorize risk:
+- **Critical (High)** — potential grounds for immediate denial, with explanation of officer concern
+- **Caution (Medium)** — likely to trigger additional scrutiny
+- **Monitor (Low)** — borderline or context-dependent
+- Summary bar showing overall risk level and tier breakdown
+
 ### Following Audit
 Scans every account you follow on Twitter and Instagram — not your own posts — and flags:
-- 🚨 **Red flags** — extremist, anti-US, or terrorist-adjacent content in their bio
-- 🏛️ **Politicians & parties** — elected officials, party accounts
-- 📰 **Journalists & news outlets** — reporters, correspondents, major media
-- ✅ **Clean** — no flags
+- **Red flags** — extremist, anti-US, or terrorist-adjacent content in their bio
+- **Politicians & parties** — elected officials, party accounts
+- **Journalists & news outlets** — reporters, correspondents, major media
+- **Clean** — no flags
 
 Bulk-unfollow flagged accounts with a single confirmation click.
 
 ### The Officer's Desk
 After scanning, generate an intelligence-style dossier written in officer voice — the same perspective a consular officer would have reviewing your file. Then:
 - **Mock Interview** — Claude plays the officer and asks pointed questions based on your flagged posts. You answer, Claude coaches you.
-- **Prep Package** — predicted interview questions with suggested talking points, export-ready.
+- **Prep Package** — predicted interview questions with suggested talking points, Visa-Ready score.
 - **Rewrite instead of delete** — Claude rewrites risky posts in a softer tone while keeping your voice.
+
+### Attorney Mode
+A second entry point for immigration lawyers managing multiple clients:
+- Client list with per-client scan history and visa-ready scores
+- Save any completed scan to a client record
+- "Cleared for interview" badge automatically applied when score ≥ 80
+- View stored dossiers per scan
+- Print-optimized risk report layout via browser print
 
 ### Chrome Extension — One-click Connect
 Install the bundled Chrome extension to connect Instagram and Twitter with one click — no API keys, no DevTools copy-paste, no OAuth setup needed.
@@ -135,9 +150,11 @@ visa-social-cleanup/
 ├── server.py                  # FastAPI server — REST + WebSocket scan
 ├── analyzer.py                # Claude AI content analysis with caching
 ├── analyzer_interview.py      # Officer's Desk: dossier, mock interview, rewrite, prep
+├── attorney.py                # Attorney mode: client CRUD, scan history storage
 ├── oauth_routes.py            # OAuth 2.0 + 1.0a popup flows
 ├── token_store.py             # Token/cookie persistence (Fly volume aware)
 ├── config.py                  # Credential loader (.env + Fly secrets)
+├── clients/                   # Attorney mode client data (gitignored, PII)
 ├── platforms/
 │   ├── twitter_client.py      # Browser-cookie + OAuth scan, following audit
 │   ├── reddit_client.py
@@ -155,11 +172,13 @@ visa-social-cleanup/
 │       ├── Dashboard.jsx           # Platform selector + scan settings
 │       ├── ConnectAccounts.jsx     # Full credentials/session management
 │       ├── QuickSetupModal.jsx     # Inline setup modal before scan
-│       ├── ScanTabsView.jsx        # Unified scan progress + results tabs
+│       ├── ScanTabsView.jsx        # Unified scan progress + results tabs (3 tabs)
 │       ├── ResultCard.jsx          # Per-item card with delete/unlike
+│       ├── RiskReportView.jsx      # Read-only risk assessment by severity tier
 │       ├── Dossier.jsx             # Intelligence brief (officer voice)
 │       ├── MockInterview.jsx       # Chat-style officer interview
 │       ├── PrepPackage.jsx         # Predicted questions + Visa-Ready score
+│       ├── AttorneyDashboard.jsx   # Attorney mode: client list + scan history
 │       ├── TwitterFollowingAudit.jsx
 │       └── InstagramFollowingAudit.jsx
 ├── Dockerfile                 # Multi-stage build (Node → Python)

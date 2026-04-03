@@ -9,6 +9,7 @@ import PrepPackage from './components/PrepPackage'
 import QuickSetupModal from './components/QuickSetupModal'
 import TwitterFollowingAudit from './components/TwitterFollowingAudit'
 import InstagramFollowingAudit from './components/InstagramFollowingAudit'
+import AttorneyDashboard from './components/AttorneyDashboard'
 
 function wsUrl() {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -185,6 +186,7 @@ export default function App() {
         theme={theme}
         onToggleTheme={toggleTheme}
         onOpenSetup={() => setView('setup')}
+        onOpenAttorney={() => setView('attorney')}
         showSetup={view === 'dashboard' || view === 'setup'}
       />
 
@@ -237,6 +239,13 @@ export default function App() {
           results={results}
           dossier={dossier}
           onBack={() => setView('dossier')}
+        />
+      )}
+      {view === 'attorney' && (
+        <AttorneyDashboard
+          onBack={() => setView('dashboard')}
+          results={results}
+          dossier={dossier}
         />
       )}
       {/* Standalone audit pages (still accessible from setup/direct links if needed) */}

@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 import config
 import analyzer as anlz
 import analyzer_interview as interview_anlz
+import attorney as atty
 import token_store
 from oauth_routes import router as oauth_router
 from platforms.oauth_flow import save_env_token
@@ -163,6 +164,47 @@ def evaluate_answer(body: dict):
     flagged_item = body.get("flagged_item")
     result = interview_anlz.evaluate_answer(question, answer, flagged_item)
     return result
+
+
+# ── Attorney Mode ─────────────────────────────────────────────────────────────
+
+@app.get("/api/attorney/clients")
+def attorney_list_clients():
+    return {"clients": atty.list_clients()}
+
+
+@app.post("/api/attorney/clients")
+def attorney_create_client(body: dict):
+    name = body.get("name", "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+    client = atty.create_client(name, body.get("email", "").strip())
+    return client
+
+
+@app.get("/api/attorney/clients/{client_id}")
+def attorney_get_client(client_id: str):
+    try:
+        return atty.get_client(client_id)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+
+@app.post("/api/attorney/clients/{client_id}/scans")
+def attorney_save_scan(client_id: str, body: dict):
+    try:
+        return atty.save_scan_to_client(client_id, body)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+
+@app.delete("/api/attorney/clients/{client_id}")
+def attorney_delete_client(client_id: str):
+    try:
+        atty.delete_client(client_id)
+        return {"ok": True}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Client not found")
 
 
 @app.websocket("/ws/scan")

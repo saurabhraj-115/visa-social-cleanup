@@ -1,6 +1,6 @@
-import { Shield, Sun, Moon, Settings } from 'lucide-react'
+import { Shield, Sun, Moon, Settings, Briefcase } from 'lucide-react'
 
-export default function Navbar({ theme, onToggleTheme, onOpenSetup, showSetup = true }) {
+export default function Navbar({ theme, onToggleTheme, onOpenSetup, onOpenAttorney, showSetup = true }) {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-gray-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md">
       <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
@@ -16,6 +16,15 @@ export default function Navbar({ theme, onToggleTheme, onOpenSetup, showSetup = 
 
         {/* Actions */}
         <div className="flex items-center gap-1">
+          {onOpenAttorney && (
+            <button
+              onClick={onOpenAttorney}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-100 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
+            >
+              <Briefcase className="w-4 h-4" />
+              <span className="hidden sm:inline">Attorney</span>
+            </button>
+          )}
           {showSetup && (
             <button
               onClick={onOpenSetup}
